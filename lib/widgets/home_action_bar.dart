@@ -1,11 +1,8 @@
-// lib/widgets/home_action_bar.dart
 import 'package:flutter/material.dart';
 import 'package:levva_entregador/models/vehicle_type_enum.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../models/order_model.dart'; // Para OrderType e PaymentMethod
-// Se VehicleType estiver em um arquivo separado, importe-o
-// import '../models/vehicle_type_enum.dart'; 
+import '../models/order_model.dart';
 
 // Widget para o conteúdo do BottomSheet de Filtros
 class FilterOptionsSheet extends StatefulWidget {
@@ -42,7 +39,6 @@ class _FilterOptionsSheetState extends State<FilterOptionsSheet> {
     }
   }
 
-  // ADICIONADO: Função para obter o nome do método de pagamento
   String getPaymentMethodName(PaymentMethod method) {
     switch (method) {
       case PaymentMethod.online:
@@ -56,12 +52,14 @@ class _FilterOptionsSheetState extends State<FilterOptionsSheet> {
     }
   }
 
+  bool get isOnlyDeliveryActive =>
+    _tempSelectedServiceTypes.length == 1 &&
+    _tempSelectedServiceTypes.contains(OrderType.food);
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    // Acessando vehicleType do driver através do authProvider
     final driverVehicleType = authProvider.currentDriver?.vehicleType;
-
 
     return Container(
       padding: const EdgeInsets.all(20.0),
@@ -87,7 +85,10 @@ class _FilterOptionsSheetState extends State<FilterOptionsSheet> {
               ),
             ),
             
-            Text("Tipos de Serviço Ativos", style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            Text(
+              "Tipos de Serviço Ativos", 
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)
+            ),
             const SizedBox(height: 8),
             ...OrderType.values
                 .where((type) => type != OrderType.unknown)
@@ -103,6 +104,10 @@ class _FilterOptionsSheetState extends State<FilterOptionsSheet> {
                     } else {
                       _tempSelectedServiceTypes.remove(serviceType);
                     }
+                    // Garantir que LevvaPay sempre estará ativo
+                    if (!_tempSelectedPaymentMethods.contains(PaymentMethod.online)) {
+                      _tempSelectedPaymentMethods.add(PaymentMethod.online);
+                    }
                   });
                 },
                 activeColor: Theme.of(context).colorScheme.primary,
@@ -111,11 +116,15 @@ class _FilterOptionsSheetState extends State<FilterOptionsSheet> {
             }).toList(),
 
             const SizedBox(height: 20),
-            Text("Formas de Pagamento Aceitas", style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            Text(
+              "Formas de Pagamento Aceitas", 
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)
+            ),
             const SizedBox(height: 8),
 
+            // LevvaPay sempre ativo e bloqueado
             CheckboxListTile(
-              title: Text(getPaymentMethodName(PaymentMethod.online)), // Usa a função definida na classe
+              title: Text(getPaymentMethodName(PaymentMethod.online)),
               value: true,
               onChanged: null,
               controlAffinity: ListTileControlAffinity.leading,
@@ -124,38 +133,54 @@ class _FilterOptionsSheetState extends State<FilterOptionsSheet> {
               secondary: Icon(Icons.lock_outline, color: Colors.grey.shade600, size: 20),
             ),
 
+            // Dinheiro
             CheckboxListTile(
-              title: Text(getPaymentMethodName(PaymentMethod.cash)), // Usa a função
+              title: Text(getPaymentMethodName(PaymentMethod.cash)),
               value: _tempSelectedPaymentMethods.contains(PaymentMethod.cash),
-              onChanged: (bool? newValue) {
-                setState(() {
-                  if (newValue == true) {
-                    _tempSelectedPaymentMethods.add(PaymentMethod.cash);
-                  } else {
-                    _tempSelectedPaymentMethods.remove(PaymentMethod.cash);
-                  }
-                });
-              },
+              onChanged: isOnlyDeliveryActive
+                  ? null
+                  : (bool? newValue) {
+                      setState(() {
+                        if (newValue == true) {
+                          _tempSelectedPaymentMethods.add(PaymentMethod.cash);
+                        } else {
+                          _tempSelectedPaymentMethods.remove(PaymentMethod.cash);
+                        }
+                      });
+                    },
               controlAffinity: ListTileControlAffinity.leading,
               activeColor: Theme.of(context).colorScheme.primary,
             ),
 
+            // Maquininha
             CheckboxListTile(
-              title: Text(getPaymentMethodName(PaymentMethod.cardMachine)), // Usa a função
+              title: Text(getPaymentMethodName(PaymentMethod.cardMachine)),
               value: _tempSelectedPaymentMethods.contains(PaymentMethod.cardMachine),
-              onChanged: (bool? newValue) {
-                setState(() {
-                  if (newValue == true) {
-                    _tempSelectedPaymentMethods.add(PaymentMethod.cardMachine);
-                  } else {
-                    _tempSelectedPaymentMethods.remove(PaymentMethod.cardMachine);
-                  }
-                });
-              },
+              onChanged: isOnlyDeliveryActive
+                  ? null
+                  : (bool? newValue) {
+                      setState(() {
+                        if (newValue == true) {
+                          _tempSelectedPaymentMethods.add(PaymentMethod.cardMachine);
+                        } else {
+                          _tempSelectedPaymentMethods.remove(PaymentMethod.cardMachine);
+                        }
+                      });
+                    },
               controlAffinity: ListTileControlAffinity.leading,
               activeColor: Theme.of(context).colorScheme.primary,
             ),
-            
+
+            if (isOnlyDeliveryActive)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Text(
+                  'Para pedidos de Delivery, o pagamento é sempre online. Dinheiro e maquininha aparecem apenas como observação da loja (ex: buscar troco ou maquininha).',
+                  style: TextStyle(color: Colors.orange[800], fontSize: 13, fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+
             const Divider(height: 30),
             Center(
               child: ElevatedButton.icon(
@@ -168,7 +193,12 @@ class _FilterOptionsSheetState extends State<FilterOptionsSheet> {
                 ),
                 onPressed: () {
                   authProvider.updateServicePreferences(_tempSelectedServiceTypes);
-                  authProvider.updatePaymentPreferences(_tempSelectedPaymentMethods);
+                  // Só salva LevvaPay se for apenas delivery
+                  if (isOnlyDeliveryActive) {
+                    authProvider.updatePaymentPreferences([PaymentMethod.online]);
+                  } else {
+                    authProvider.updatePaymentPreferences(_tempSelectedPaymentMethods);
+                  }
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Preferências salvas!'), backgroundColor: Colors.green),

@@ -22,7 +22,7 @@ enum OrderStatus {
   cancelledByDriver,
   cancelledBySystem,
   cancellationRequested,
-  unknown
+  unknown, started, accepted, delivered
 }
 
 class Order {
@@ -43,6 +43,9 @@ class Order {
   final String? recipientPhoneNumber;
   DateTime? waitingSince;
 
+  // Adicionado campo notes:
+  final String? notes;
+
   Order({
     required this.id,
     required this.type,
@@ -59,7 +62,8 @@ class Order {
     this.suitableVehicleTypes = const [VehicleType.moto, VehicleType.bike],
     this.paymentMethod = PaymentMethod.online,
     this.recipientPhoneNumber,
-    this.waitingSince, String? confirmationCode,
+    this.waitingSince,
+    this.notes, // Adicionado no construtor
   });
 
   String? get confirmationCode {
@@ -88,25 +92,25 @@ class Order {
   // --- INÍCIO DA SERIALIZAÇÃO E DESSERIALIZAÇÃO ---
   Map<String, dynamic> toJson() => {
         'id': id,
-        'type': type.name, // Salva o nome do enum
+        'type': type.name,
         'pickupAddress': pickupAddress,
         'deliveryAddress': deliveryAddress,
         'estimatedValue': estimatedValue,
         'distanceToPickup': distanceToPickup,
         'routeDistance': routeDistance,
-        'status': status.name, // Salva o nome do enum
-        'creationTime': creationTime.toIso8601String(), // Salva DateTime como String ISO8601
+        'status': status.name,
+        'creationTime': creationTime.toIso8601String(),
         'customerName': customerName,
         'storeName': storeName,
-        'items': items, // Lista de strings já é serializável
-        'suitableVehicleTypes': suitableVehicleTypes.map((v) => v.name).toList(), // Lista de enums para lista de strings
-        'paymentMethod': paymentMethod.name, // Salva o nome do enum
+        'items': items,
+        'suitableVehicleTypes': suitableVehicleTypes.map((v) => v.name).toList(),
+        'paymentMethod': paymentMethod.name,
         'recipientPhoneNumber': recipientPhoneNumber,
-        'waitingSince': waitingSince?.toIso8601String(), // Salva DateTime opcional como String ISO8601
+        'waitingSince': waitingSince?.toIso8601String(),
+        'notes': notes, // Incluído na serialização
       };
 
   factory Order.fromJson(Map<String, dynamic> json) {
-    // Helper para converter string de volta para enum com segurança
     T _enumFromString<T>(List<T> enumValues, String value, T defaultValue) {
       try {
         return enumValues.firstWhere((e) => (e as Enum).name == value);
@@ -121,23 +125,24 @@ class Order {
     return Order(
       id: json['id'] as String,
       type: _enumFromString(OrderType.values, json['type'] as String? ?? OrderType.unknown.name, OrderType.unknown),
-      pickupAddress: json['pickupAddress'] as String? ?? '', // Fallback para string vazia se nulo
-      deliveryAddress: json['deliveryAddress'] as String? ?? '', // Fallback para string vazia se nulo
+      pickupAddress: json['pickupAddress'] as String? ?? '',
+      deliveryAddress: json['deliveryAddress'] as String? ?? '',
       estimatedValue: (json['estimatedValue'] as num?)?.toDouble() ?? 0.0,
       distanceToPickup: (json['distanceToPickup'] as num?)?.toDouble() ?? 0.0,
       routeDistance: (json['routeDistance'] as num?)?.toDouble() ?? 0.0,
       status: _enumFromString(OrderStatus.values, json['status'] as String? ?? OrderStatus.unknown.name, OrderStatus.unknown),
-      creationTime: json['creationTime'] != null ? DateTime.parse(json['creationTime'] as String) : DateTime.now(), // Fallback para data atual se nulo
+      creationTime: json['creationTime'] != null ? DateTime.parse(json['creationTime'] as String) : DateTime.now(),
       customerName: json['customerName'] as String?,
       storeName: json['storeName'] as String?,
       items: (json['items'] as List<dynamic>?)?.map((item) => item as String).toList(),
       suitableVehicleTypes: (json['suitableVehicleTypes'] as List<dynamic>?)
           ?.map((v) => _enumFromString(VehicleType.values, v as String? ?? VehicleType.unknown.name, VehicleType.unknown))
-          .where((v) => v != VehicleType.unknown) // Remove desconhecidos se houver erro na conversão
-          .toList() ?? const [VehicleType.moto, VehicleType.bike], // Default se nulo ou vazio no JSON
+          .where((v) => v != VehicleType.unknown)
+          .toList() ?? const [VehicleType.moto, VehicleType.bike],
       paymentMethod: _enumFromString(PaymentMethod.values, json['paymentMethod'] as String? ?? PaymentMethod.online.name, PaymentMethod.online),
       recipientPhoneNumber: json['recipientPhoneNumber'] as String?,
       waitingSince: json['waitingSince'] != null ? DateTime.parse(json['waitingSince'] as String) : null,
+      notes: json['notes'] as String?, // Incluído na desserialização
     );
   }
   // --- FIM DA SERIALIZAÇÃO E DESSERIALIZAÇÃO ---

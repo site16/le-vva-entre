@@ -1,4 +1,3 @@
-// lib/providers/auth_provider.dart
 import 'package:flutter/foundation.dart';
 import '../models/driver_model.dart';
 import '../models/order_model.dart'; // Para OrderType e PaymentMethod
@@ -83,15 +82,24 @@ class AuthProvider with ChangeNotifier {
   Future<void> updatePaymentPreferences(List<PaymentMethod> newPreferences) async {
     if (_currentDriver == null) return;
 
-    // Regra de negócio: PaymentMethod.online (LevvaPay) é sempre aceito.
-    if (!newPreferences.contains(PaymentMethod.online)) {
-      newPreferences.insert(0, PaymentMethod.online);
+    // Verifica se só "Delivery de Comida" está ativo
+    bool onlyDeliveryActive = _currentDriver!.preferredServiceTypes.length == 1 &&
+        _currentDriver!.preferredServiceTypes.contains(OrderType.food);
+
+    if (onlyDeliveryActive) {
+      // Força LevvaPay como única forma de pagamento para Delivery
+      _currentDriver!.preferredPaymentMethods = [PaymentMethod.online];
+    } else {
+      // Garante que LevvaPay sempre está incluso
+      if (!newPreferences.contains(PaymentMethod.online)) {
+        newPreferences.insert(0, PaymentMethod.online);
+      }
+      _currentDriver!.preferredPaymentMethods = newPreferences;
     }
 
-    _currentDriver!.preferredPaymentMethods = newPreferences;
     notifyListeners();
     if (kDebugMode) {
-      print("AuthProvider: Preferências de pagamento atualizadas para: $newPreferences");
+      print("AuthProvider: Preferências de pagamento atualizadas para: ${_currentDriver!.preferredPaymentMethods}");
     }
     // Em um app real, você salvaria isso no backend.
   }

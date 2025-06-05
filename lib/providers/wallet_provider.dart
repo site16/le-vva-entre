@@ -1,68 +1,106 @@
-// lib/providers/wallet_provider.dart
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:levva_entregador/models/wallet_transaction_model.dart';
-import 'package:levva_entregador/models/order_model.dart'; // Ajuste o caminho se necessário
+import 'package:levva_entregador/models/order_model.dart';
+import 'package:provider/provider.dart';
+import 'notification_provider.dart';
+
+enum WalletFilterType { all, today, yesterday, customRange }
+
+class WalletSnapshot {
+  final DateTime referenceDate;
+  final double cashBalanceSnapshot;
+  final double grossEarningsForCommissionSnapshot;
+
+  WalletSnapshot({
+    required this.referenceDate,
+    required this.cashBalanceSnapshot,
+    required this.grossEarningsForCommissionSnapshot,
+  });
+}
 
 class WalletProvider with ChangeNotifier {
   double _onlineBalance = 0.0;
-  double _cashBalance = 0.0; // Informativo, valor já coletado pelo entregador
-  double _grossEarningsForCommission = 0.0; // Ganhos brutos (online + dinheiro/maquininha) para cálculo da comissão
+  double _cashBalance = 0.0;
+  double _grossEarningsForCommission = 0.0;
 
   List<WalletTransaction> _transactions = [];
   bool _isLoading = false;
 
-  // Taxas da plataforma (campos privados)
+  WalletFilterType _currentFilterType = WalletFilterType.all;
+  DateTimeRange? _selectedDateRange;
+  List<WalletTransaction> _filteredTransactions = [];
+
+  final Map<String, WalletSnapshot> _monthlySnapshots = {};
+
+  WalletFilterType get currentFilterType => _currentFilterType;
+  DateTimeRange? get selectedDateRange => _selectedDateRange;
+  List<WalletTransaction> get filteredTransactions => List.unmodifiable(_filteredTransactions);
+  Map<String, WalletSnapshot> get monthlySnapshots => Map.unmodifiable(_monthlySnapshots);
+
   final double _maintenanceFeePercentage = 0.10; // 10%
   final double _transferFeePercentage = 0.015;   // 1.5%
 
-  // Getters públicos para os saldos e estado
   double get onlineBalance => _onlineBalance;
   double get cashBalance => _cashBalance;
   double get grossEarningsForCommission => _grossEarningsForCommission;
   List<WalletTransaction> get transactions => List.unmodifiable(_transactions);
   bool get isLoading => _isLoading;
 
-  // GETTERS PÚBLICOS PARA AS PORCENTAGENS DAS TAXAS
   double get maintenanceFeePercentage => _maintenanceFeePercentage;
   double get transferFeePercentage => _transferFeePercentage;
-
-  // Getter para a taxa de comissão total
   double get totalCommissionRate => _maintenanceFeePercentage + _transferFeePercentage;
 
-  // Simula a busca de dados (ex: para pull-to-refresh)
+  void ensureMonthlySnapshot() {
+    final now = DateTime.now();
+    final key = "${now.year}-${now.month.toString().padLeft(2, '0')}";
+    if (!_monthlySnapshots.containsKey(key)) {
+      _monthlySnapshots[key] = WalletSnapshot(
+        referenceDate: DateTime(now.year, now.month, 1),
+        cashBalanceSnapshot: _cashBalance,
+        grossEarningsForCommissionSnapshot: _grossEarningsForCommission,
+      );
+      _cashBalance = 0.0;
+      if (_onlineBalance > 0) {
+        _grossEarningsForCommission = _onlineBalance;
+      } else {
+        _grossEarningsForCommission = 0.0;
+      }
+      notifyListeners();
+    }
+  }
+
+  WalletSnapshot? getSnapshotForMonth(int year, int month) {
+    final key = "$year-${month.toString().padLeft(2, '0')}";
+    return _monthlySnapshots[key];
+  }
+
   Future<void> fetchWalletData() async {
     _isLoading = true;
     notifyListeners();
-    await Future.delayed(const Duration(seconds: 1)); // Simula atraso de rede
-
-    // Nenhuma transação de exemplo é adicionada aqui.
-    // O provider agora depende inteiramente das chamadas de 'addTransactionForOrderCompletion'
-    // vindas do OrderProvider para popular os dados.
-    // Em um app real, esta função buscaria os dados de um backend ou armazenamento local.
-    // Para a simulação atual, manter os dados em memória é suficiente.
-
+    await Future.delayed(const Duration(seconds: 1));
     _isLoading = false;
+    ensureMonthlySnapshot();
+    _applyFilter();
     notifyListeners();
   }
 
-  // Adiciona transação por conclusão de pedido (chamado pelo OrderProvider)
   void addTransactionForOrderCompletion(Order completedOrder) {
+    ensureMonthlySnapshot();
+
     double earnings = completedOrder.estimatedValue;
     if (earnings <= 0) {
-      if (kDebugMode) {
-        print("WalletProvider: Ganhos zerados ou negativos para o pedido ${completedOrder.id}, nenhuma transação adicionada.");
-      }
       return;
     }
 
     TransactionType transactionType;
     String description;
-    String orderIdShort = completedOrder.id.substring(0, _getSafeSubstringLength(completedOrder.id, 6));
+    String orderIdShort = completedOrder.id.substring(0, completedOrder.id.length < 6 ? completedOrder.id.length : 6);
     String paymentMethodName = "Desconhecido";
 
     switch (completedOrder.paymentMethod) {
       case PaymentMethod.online:
-      case PaymentMethod.levvaPay: // Tratar LevvaPay como online
+      case PaymentMethod.levvaPay:
         _onlineBalance += earnings;
         transactionType = TransactionType.creditOnlineEarning;
         paymentMethodName = "Online";
@@ -77,7 +115,7 @@ class WalletProvider with ChangeNotifier {
         transactionType = TransactionType.infoCashEarning;
         paymentMethodName = "Maquininha";
         break;
-      case PaymentMethod.card: // Decisão de negócio: tratar como online ou maquininha? Assumindo online por padrão.
+      case PaymentMethod.card:
         _onlineBalance += earnings;
         transactionType = TransactionType.creditOnlineEarning;
         paymentMethodName = "Cartão (Online)";
@@ -97,13 +135,10 @@ class WalletProvider with ChangeNotifier {
     );
 
     _transactions.insert(0, newTransaction);
-    if (kDebugMode) {
-      print("WalletProvider: Pedido ${completedOrder.id} (Pagamento: ${completedOrder.paymentMethod.name}) finalizado. Ganho de R\$$earnings. Saldo Online: R\$$_onlineBalance, Saldo Dinheiro/Maq.: R\$$_cashBalance, Bruto Comissão: R\$$_grossEarningsForCommission");
-    }
+    _applyFilter();
     notifyListeners();
   }
 
-  // Calcula detalhes do saque proposto
   Map<String, double> calculateWithdrawalDetails(double requestedAmountFromOnline) {
     if (requestedAmountFromOnline <= 0) {
       return {
@@ -128,8 +163,7 @@ class WalletProvider with ChangeNotifier {
     };
   }
 
-  // Processa a solicitação de saque
-  Future<void> requestWithdrawal(double requestedAmountFromOnline) async {
+  Future<void> requestWithdrawal(double requestedAmountFromOnline, BuildContext context) async {
     _isLoading = true;
     notifyListeners();
 
@@ -159,7 +193,7 @@ class WalletProvider with ChangeNotifier {
     _onlineBalance -= totalDebitFromOnline;
     _onlineBalance = (_onlineBalance * 100).roundToDouble() / 100;
 
-    _grossEarningsForCommission = 0.0; // Zera, pois a comissão foi liquidada
+    _grossEarningsForCommission = 0.0;
 
     _transactions.insert(
         0,
@@ -172,15 +206,63 @@ class WalletProvider with ChangeNotifier {
           date: DateTime.now(),
         ));
 
+    // Notificação de saque
+    Provider.of<NotificationProvider>(context, listen: false).addWithdrawalNotification(
+      requested: totalDebitFromOnline,
+      net: netAmountToReceive,
+      fees: platformCommission,
+      status: "Pendente",
+    );
+
+    _applyFilter();
     _isLoading = false;
-    if (kDebugMode) {
-      print("WalletProvider: Saque de R\$$totalDebitFromOnline processado. Líquido: R\$$netAmountToReceive. Comissão Retida: R\$$platformCommission. Novo Saldo Online: R\$$_onlineBalance. Novo Bruto Comissão: R\$$_grossEarningsForCommission");
-    }
     notifyListeners();
   }
 
-  // Função auxiliar para evitar erros de substring
-  int _getSafeSubstringLength(String text, int maxLength) {
-    return text.length < maxLength ? text.length : maxLength;
+  void applyFilter(WalletFilterType filterType, {DateTimeRange? customRange}) {
+    _currentFilterType = filterType;
+    if (filterType == WalletFilterType.customRange && customRange != null) {
+      _selectedDateRange = customRange;
+    } else {
+      _selectedDateRange = null;
+    }
+    _applyFilter();
+    notifyListeners();
+  }
+
+  void _applyFilter() {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+    final yesterdayStart = todayStart.subtract(const Duration(days: 1));
+    final yesterdayEnd = todayEnd.subtract(const Duration(days: 1));
+
+    switch (_currentFilterType) {
+      case WalletFilterType.all:
+        _filteredTransactions = List.from(_transactions);
+        break;
+      case WalletFilterType.today:
+        _filteredTransactions = _transactions.where((tx) =>
+          !tx.date.isBefore(todayStart) && !tx.date.isAfter(todayEnd)
+        ).toList();
+        break;
+      case WalletFilterType.yesterday:
+        _filteredTransactions = _transactions.where((tx) =>
+          !tx.date.isBefore(yesterdayStart) && !tx.date.isAfter(yesterdayEnd)
+        ).toList();
+        break;
+      case WalletFilterType.customRange:
+        if (_selectedDateRange != null) {
+          final rangeStart = DateTime(_selectedDateRange!.start.year, _selectedDateRange!.start.month, _selectedDateRange!.start.day);
+          final rangeEnd = DateTime(_selectedDateRange!.end.year, _selectedDateRange!.end.month, _selectedDateRange!.end.day, 23, 59, 59, 999);
+          _filteredTransactions = _transactions.where((tx) =>
+            !tx.date.isBefore(rangeStart) && !tx.date.isAfter(rangeEnd)
+          ).toList();
+        } else {
+          _filteredTransactions = List.from(_transactions);
+        }
+        break;
+    }
+    _filteredTransactions.sort((a, b) => b.date.compareTo(a.date));
   }
 }

@@ -1,6 +1,3 @@
-// lib/screens/profile_screen.dart
-// Exibe as informações do perfil do entregador, como nome, email,
-// dados do veículo e documentos. Permite a edição (simulada).
 import 'package:flutter/material.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -8,7 +5,7 @@ class ProfileScreen extends StatelessWidget {
   static const routeName = '/profile';
 
   @override
-  Widget build(BuildContext context) { // O 'context' principal do método build
+  Widget build(BuildContext context) {
     // Dados mocados do perfil
     const String driverName = "Carlos Silva";
     const String driverEmail = "carlos.silva@email.com";
@@ -20,6 +17,10 @@ class ProfileScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Meu Perfil'),
+        centerTitle: true,
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 1,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -32,20 +33,19 @@ class ProfileScreen extends StatelessWidget {
                   Stack(
                     alignment: Alignment.bottomRight,
                     children: [
-                      CircleAvatar( // Removido o 'const' daqui
+                      CircleAvatar(
                         radius: 60,
-                        // backgroundImage: NetworkImage('URL_DA_FOTO_DO_PERFIL'), // Adicionar foto
-                        backgroundColor: Colors.grey[200], // CORRIGIDO AQUI
-                        child: Icon(Icons.person, size: 60, color: Colors.grey[600]), // Ajustado para um tom mais escuro
+                        backgroundColor: Colors.grey[200],
+                        child: Icon(Icons.person, size: 60, color: Colors.grey[600]),
                       ),
                       Material(
-                        color: Theme.of(context).primaryColor,
+                        color: Theme.of(context).colorScheme.secondary,
                         borderRadius: BorderRadius.circular(20),
                         child: InkWell(
                           onTap: () {
-                             ScaffoldMessenger.of(context).showSnackBar(
-                               const SnackBar(content: Text('Editar foto do perfil (a implementar).')),
-                             );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Editar foto do perfil (a implementar).')),
+                            );
                           },
                           borderRadius: BorderRadius.circular(20),
                           child: const Padding(
@@ -57,39 +57,49 @@ class ProfileScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text(driverName, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                   Row(
+                  Text(
+                    driverName,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.star, color: Theme.of(context).colorScheme.secondary, size: 20),
+                      Icon(Icons.star,
+                          color: Theme.of(context).colorScheme.secondary, size: 20),
                       const SizedBox(width: 4),
-                      Text(driverRating, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text(driverRating,
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 4),
-                      const Text('(Sua Avaliação)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const Text('(Sua Avaliação)',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
                     ],
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-            _buildProfileInfoCard(context, 'Informações Pessoais', [ // Passando 'context'
-              _buildInfoRow(context, Icons.email_outlined, 'Email', driverEmail), // Passando 'context'
-              _buildInfoRow(context, Icons.phone_outlined, 'Telefone', driverPhone), // Passando 'context'
+            _buildProfileInfoCard(context, 'Informações Pessoais', [
+              _buildInfoRow(context, Icons.email_outlined, 'Email', driverEmail),
+              _buildInfoRow(context, Icons.phone_outlined, 'Telefone', driverPhone),
             ]),
             const SizedBox(height: 20),
-            _buildProfileInfoCard(context, 'Informações do Veículo', [ // Passando 'context'
-              _buildInfoRow(context, Icons.motorcycle_outlined, 'Modelo', vehicleModel), // Passando 'context'
-              _buildInfoRow(context, Icons.pin_outlined, 'Placa', licensePlate), // Passando 'context'
+            _buildProfileInfoCard(context, 'Informações do Veículo', [
+              _buildInfoRow(context, Icons.motorcycle_outlined, 'Modelo', vehicleModel),
+              _buildInfoRow(context, Icons.pin_outlined, 'Placa', licensePlate),
             ]),
             const SizedBox(height: 20),
-             _buildProfileInfoCard(context, 'Documentos', [ // Passando 'context'
-              _buildInfoRow(context, Icons.badge_outlined, 'CNH', 'Válida até 20/10/2025', action: () { // Passando 'context'
+            _buildProfileInfoCard(context, 'Documentos', [
+              _buildInfoRow(context, Icons.badge_outlined, 'CNH', 'Válida até 20/10/2025', action: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Visualizar/Atualizar CNH (a implementar).')),
                 );
               }),
-              _buildInfoRow(context, Icons.description_outlined, 'CRLV', 'Atualizado', action: () { // Passando 'context'
-                 ScaffoldMessenger.of(context).showSnackBar(
+              _buildInfoRow(context, Icons.description_outlined, 'CRLV', 'Atualizado', action: () {
+                ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Visualizar/Atualizar CRLV (a implementar).')),
                 );
               }),
@@ -108,6 +118,10 @@ class ProfileScreen extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.secondary,
                   foregroundColor: Colors.black87,
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                  textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 1,
                 ),
               ),
             ),
@@ -117,11 +131,14 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // Método _buildProfileInfoCard já recebe e usa 'context'
-  Widget _buildProfileInfoCard(BuildContext context, String title, List<Widget> children) {
+  Widget _buildProfileInfoCard(
+      BuildContext context, String title, List<Widget> children) {
     return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      elevation: 2,
+      margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(18.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -133,7 +150,7 @@ class ProfileScreen extends StatelessWidget {
                 color: Theme.of(context).primaryColor,
               ),
             ),
-            const Divider(height: 20, thickness: 1),
+            const Divider(height: 24, thickness: 1.2),
             ...children,
           ],
         ),
@@ -141,8 +158,8 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // CORRIGIDO: Adicionado BuildContext context como parâmetro
-  Widget _buildInfoRow(BuildContext context, IconData icon, String label, String value, {VoidCallback? action}) {
+  Widget _buildInfoRow(BuildContext context, IconData icon, String label, String value,
+      {VoidCallback? action}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
@@ -168,7 +185,6 @@ class ProfileScreen extends StatelessWidget {
           ),
           if (action != null)
             IconButton(
-              // CORRIGIDO: 'context' agora está disponível aqui
               icon: Icon(Icons.arrow_forward_ios, size: 16, color: Theme.of(context).primaryColor),
               onPressed: action,
               padding: EdgeInsets.zero,
@@ -179,3 +195,4 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 }
+

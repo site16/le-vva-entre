@@ -1,15 +1,14 @@
-// lib/providers/history_provider.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/ride_history_entry.dart';
-import '../models/order_model.dart';
 import './order_provider.dart';
+import '../models/order_model.dart';
 
 enum HistoryFilterType { all, today, yesterday, customRange }
 
 class HistoryProvider with ChangeNotifier {
-  OrderProvider _orderProvider; // Modificado para ser privado e não final
+  OrderProvider _orderProvider;
 
   List<RideHistoryEntry> _allHistoryEntries = [];
   List<RideHistoryEntry> _filteredHistoryEntries = [];
@@ -17,45 +16,41 @@ class HistoryProvider with ChangeNotifier {
   DateTimeRange? _selectedDateRange;
   HistoryFilterType _currentFilterType = HistoryFilterType.all;
 
-  HistoryProvider(this._orderProvider) { // Recebe a instância inicial
-    if (kDebugMode) {
-      print("HistoryProvider: Inicializado e ouvindo OrderProvider inicial.");
-    }
+  HistoryProvider(this._orderProvider) {
     _orderProvider.addListener(_updateHistoryFromOrders);
-    _updateHistoryFromOrders(); // Carga inicial
+    _updateHistoryFromOrders();
   }
 
-  // Getters públicos
   List<RideHistoryEntry> get filteredHistoryEntries => _filteredHistoryEntries;
   DateTimeRange? get selectedDateRange => _selectedDateRange;
   HistoryFilterType get currentFilterType => _currentFilterType;
 
-  // Método para atualizar a dependência do OrderProvider
   void updateOrderProvider(OrderProvider newOrderProvider) {
     if (_orderProvider != newOrderProvider) {
-      if (kDebugMode) {
-        print("HistoryProvider: Atualizando OrderProvider. Removendo listener do antigo, adicionando ao novo.");
-      }
-      _orderProvider.removeListener(_updateHistoryFromOrders); // Remove do antigo
-      _orderProvider = newOrderProvider; // Atualiza para o novo
-      _orderProvider.addListener(_updateHistoryFromOrders); // Adiciona ao novo
-      _updateHistoryFromOrders(); // Recarrega o histórico com base no novo provider
+      _orderProvider.removeListener(_updateHistoryFromOrders);
+      _orderProvider = newOrderProvider;
+      _orderProvider.addListener(_updateHistoryFromOrders);
+      _updateHistoryFromOrders();
     }
   }
 
   void _updateHistoryFromOrders() {
-    if (kDebugMode) {
-      print("HistoryProvider: _updateHistoryFromOrders chamado. OrderProvider tem ${_orderProvider.orderHistory.length} itens.");
-    }
     _allHistoryEntries = _orderProvider.orderHistory.map((order) {
       return RideHistoryEntry(
         id: order.id,
         type: order.type,
-        dateTime: order.creationTime, // Idealmente, order.completionTime
+        dateTime: order.creationTime,
         origin: order.pickupAddress,
         destination: order.deliveryAddress,
         value: order.estimatedValue,
         status: order.status,
+        paymentMethod: order.paymentMethod, // <-- campo adicionado!
+        notes: order.notes,
+        code: "#${order.id}",
+        userName: order.customerName ?? "@usuário",
+        timeStart: DateFormat('HH:mm').format(order.creationTime),
+        timeAccepted: DateFormat('HH:mm').format(order.creationTime.add(const Duration(minutes: 7))),
+        timeDelivered: DateFormat('HH:mm').format(order.creationTime.add(const Duration(minutes: 18))),
       );
     }).toList();
 
@@ -63,16 +58,32 @@ class HistoryProvider with ChangeNotifier {
     _sortEntries();
     notifyListeners();
   }
-  
+
+  // ORDENA os pedidos mais recentes EM CIMA (ordem de chegada)
   void _sortEntries() {
     _filteredHistoryEntries.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    // Se quiser ativos em cima e finalizados/cancelados embaixo, use isso:
+    /*
+    _filteredHistoryEntries.sort((a, b) {
+      int statusPriority(A) {
+        // Defina status considerados ATIVOS:
+        if (A.status == OrderStatus.completed ||
+            A.status == OrderStatus.cancelledByCustomer ||
+            A.status == OrderStatus.cancelledByDriver ||
+            A.status == OrderStatus.cancelledBySystem) return 1;
+        return 0;
+      }
+      int cmp = statusPriority(a).compareTo(statusPriority(b));
+      if (cmp != 0) return cmp;
+      return b.dateTime.compareTo(a.dateTime);
+    });
+    */
   }
 
   Map<String, List<RideHistoryEntry>> get groupedEntries {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
-    
     final DateFormat groupHeaderFormatThisYear = DateFormat('EEE, dd MMM', 'pt_BR');
     final DateFormat groupHeaderFormatPastYear = DateFormat('dd MMM yy', 'pt_BR');
 
@@ -101,7 +112,6 @@ class HistoryProvider with ChangeNotifier {
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
     final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
-    
     final yesterdayStart = todayStart.subtract(const Duration(days: 1));
     final yesterdayEnd = todayEnd.subtract(const Duration(days: 1));
 
@@ -127,7 +137,7 @@ class HistoryProvider with ChangeNotifier {
             return !entry.dateTime.isBefore(rangeStart) && !entry.dateTime.isAfter(rangeEndInclusive);
           }).toList();
         } else {
-            _filteredHistoryEntries = List.from(_allHistoryEntries);
+          _filteredHistoryEntries = List.from(_allHistoryEntries);
         }
         break;
     }
@@ -137,14 +147,18 @@ class HistoryProvider with ChangeNotifier {
     _currentFilterType = filterType;
     final now = DateTime.now();
     if (filterType == HistoryFilterType.today) {
-        _selectedDateRange = DateTimeRange(start: DateTime(now.year, now.month, now.day), end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999));
+      _selectedDateRange = DateTimeRange(
+          start: DateTime(now.year, now.month, now.day),
+          end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999));
     } else if (filterType == HistoryFilterType.yesterday) {
-        final yesterdayStart = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
-        _selectedDateRange = DateTimeRange(start: yesterdayStart, end: DateTime(yesterdayStart.year, yesterdayStart.month, yesterdayStart.day, 23, 59, 59, 999));
+      final yesterdayStart = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
+      _selectedDateRange = DateTimeRange(
+          start: yesterdayStart,
+          end: DateTime(yesterdayStart.year, yesterdayStart.month, yesterdayStart.day, 23, 59, 59, 999));
     } else if (filterType == HistoryFilterType.customRange && customRange != null) {
-        _selectedDateRange = customRange;
-    } else { // HistoryFilterType.all
-        _selectedDateRange = null;
+      _selectedDateRange = customRange;
+    } else {
+      _selectedDateRange = null;
     }
 
     _applyFilterLogic(filterType, customRange: _selectedDateRange);
@@ -154,10 +168,6 @@ class HistoryProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    if (kDebugMode) {
-      print("HistoryProvider: Disposing and removing listener from OrderProvider.");
-    }
-    // Remove o listener da instância atual de _orderProvider
     _orderProvider.removeListener(_updateHistoryFromOrders);
     super.dispose();
   }

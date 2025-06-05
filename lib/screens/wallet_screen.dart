@@ -1,8 +1,7 @@
-// lib/screens/wallet_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:lottie/lottie.dart'; // <<< IMPORTAR PACOTE LOTTIE
+import 'package:lottie/lottie.dart';
 import '../models/wallet_transaction_model.dart';
 import '../providers/wallet_provider.dart';
 
@@ -21,6 +20,111 @@ class _WalletScreenState extends State<WalletScreen> {
   );
   bool _showFeeDetailsInSheet = false;
 
+  String _getFilterButtonText(WalletProvider provider) {
+    final DateFormat btnDateFormat = DateFormat('dd/MM/yy');
+    switch (provider.currentFilterType) {
+      case WalletFilterType.all:
+        return 'Todos';
+      case WalletFilterType.today:
+        return 'Hoje';
+      case WalletFilterType.yesterday:
+        return 'Ontem';
+      case WalletFilterType.customRange:
+        if (provider.selectedDateRange != null) {
+          return '${btnDateFormat.format(provider.selectedDateRange!.start)} - ${btnDateFormat.format(provider.selectedDateRange!.end)}';
+        }
+        return 'Intervalo';
+      default:
+        return 'Filtrar';
+    }
+  }
+
+  void _showFilterOptions(BuildContext context, WalletProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Filtrar Movimentações',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                title: const Text('Todos'),
+                onTap: () {
+                  provider.applyFilter(WalletFilterType.all);
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                title: const Text('Hoje'),
+                onTap: () {
+                  provider.applyFilter(WalletFilterType.today);
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                title: const Text('Ontem'),
+                onTap: () {
+                  provider.applyFilter(WalletFilterType.yesterday);
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                title: const Text('Selecionar Intervalo...'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final DateTimeRange? picked = await showDateRangePicker(
+                    context: context,
+                    initialDateRange:
+                        provider.selectedDateRange ??
+                        DateTimeRange(
+                          start: DateTime.now().subtract(
+                            const Duration(days: 7),
+                          ),
+                          end: DateTime.now(),
+                        ),
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now().add(const Duration(days: 1)),
+                    locale: const Locale('pt', 'BR'),
+                    builder: (context, child) {
+                      return Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: Theme.of(context).colorScheme.copyWith(
+                            primary: Theme.of(context).primaryColor,
+                            onPrimary: Colors.white,
+                          ),
+                        ),
+                        child: child!,
+                      );
+                    },
+                  );
+                  if (picked != null) {
+                    provider.applyFilter(
+                      WalletFilterType.customRange,
+                      customRange: picked,
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _showSuccessDialogAfterWithdrawal(
     double netAmountReceived,
   ) async {
@@ -32,7 +136,6 @@ class _WalletScreenState extends State<WalletScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          // <<< AJUSTES NO PADDING E CONTEÚDO DO TÍTULO PARA A ANIMAÇÃO >>>
           titlePadding: const EdgeInsets.only(top: 20.0, bottom: 0),
           contentPadding: const EdgeInsets.fromLTRB(24.0, 10.0, 24.0, 24.0),
           title: Column(
@@ -40,12 +143,11 @@ class _WalletScreenState extends State<WalletScreen> {
             children: [
               Lottie.asset(
                 'assets/animations/valeu.json',
-                height: 80, // Ajuste a altura conforme necessário
-                width: 80, // Ajuste a largura conforme necessário
+                height: 80,
+                width: 80,
                 fit: BoxFit.contain,
-                repeat: false, // Para a animação rodar uma vez
+                repeat: false,
                 errorBuilder: (context, error, stackTrace) {
-                  // Fallback caso a animação não carregue
                   return const Icon(
                     Icons.check_circle_outline_rounded,
                     color: Color(0xFF009688),
@@ -63,11 +165,11 @@ class _WalletScreenState extends State<WalletScreen> {
                 const Text(
                   'Sua solicitação de saque foi recebida e será processada pela nossa equipe.',
                   style: TextStyle(fontSize: 15),
-                  textAlign: TextAlign.center, // Adicionado para consistência
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
                 RichText(
-                  textAlign: TextAlign.center, // Adicionado para consistência
+                  textAlign: TextAlign.center,
                   text: TextSpan(
                     style: TextStyle(
                       fontSize: 15,
@@ -130,7 +232,7 @@ class _WalletScreenState extends State<WalletScreen> {
     final amountController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
-    _showFeeDetailsInSheet = false; // Reseta ao abrir o bottom sheet
+    _showFeeDetailsInSheet = false;
 
     showModalBottomSheet(
       context: context,
@@ -151,11 +253,8 @@ class _WalletScreenState extends State<WalletScreen> {
 
             double netAmountToReceive = details['netAmountToReceive'] ?? 0.0;
             double totalDebitFromOnline =
-                details['totalDebitFromOnline'] ??
-                0.0; // Este é o valor que será debitado
+                details['totalDebitFromOnline'] ?? 0.0;
 
-            // Recalcula as taxas baseadas no valor bruto para exibição, como no seu código original
-            // No entanto, as taxas reais são calculadas em calculateWithdrawalDetails
             double displayMaintenanceFeeValue =
                 provider.grossEarningsForCommission *
                 provider.maintenanceFeePercentage;
@@ -163,7 +262,6 @@ class _WalletScreenState extends State<WalletScreen> {
                 provider.grossEarningsForCommission *
                 provider.transferFeePercentage;
 
-            // Arredondamento para exibição
             displayMaintenanceFeeValue =
                 (displayMaintenanceFeeValue * 100).roundToDouble() / 100;
             displayTransferFeeValue =
@@ -171,9 +269,7 @@ class _WalletScreenState extends State<WalletScreen> {
 
             bool canProceed =
                 requestedAmount > 0 &&
-                totalDebitFromOnline <=
-                    provider
-                        .onlineBalance && // Verifica se o débito total é coberto
+                totalDebitFromOnline <= provider.onlineBalance &&
                 netAmountToReceive > 0;
 
             return Padding(
@@ -247,7 +343,6 @@ class _WalletScreenState extends State<WalletScreen> {
                               0.0;
                           if (amount <= 0) return 'Valor inválido.';
 
-                          // Re-calcula detalhes para validação precisa
                           final validationDetails = provider
                               .calculateWithdrawalDetails(amount);
                           final validationTotalDebit =
@@ -271,8 +366,6 @@ class _WalletScreenState extends State<WalletScreen> {
                         },
                         onChanged: (value) {
                           setModalState(() {
-                            // A lógica de _showFeeDetailsInSheet e formKey.currentState!.validate() é para mostrar
-                            // os detalhes das taxas dinamicamente e revalidar o campo.
                             final currentAmount =
                                 double.tryParse(
                                   amountController.text.replaceAll(',', '.'),
@@ -292,14 +385,11 @@ class _WalletScreenState extends State<WalletScreen> {
                       ),
                       Divider(color: Colors.grey.shade300, height: 20),
                       const SizedBox(height: 16),
-
-                      if (requestedAmount >
-                          0) // Mostra apenas se houver valor digitado
+                      if (requestedAmount > 0)
                         _buildDetailRowSheet(
                           'Valor Solicitado:',
                           requestedAmount,
-                        ), // Mostra o valor bruto solicitado
-
+                        ),
                       AnimatedSize(
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeInOut,
@@ -346,38 +436,36 @@ class _WalletScreenState extends State<WalletScreen> {
                         child: ElevatedButton(
                           onPressed:
                               canProceed
-                                  ? () {
+                                  ? () async {
                                     if (formKey.currentState!.validate()) {
                                       Navigator.of(modalContext).pop();
-                                      provider
-                                          .requestWithdrawal(requestedAmount)
-                                          .then((_) {
-                                            _showSuccessDialogAfterWithdrawal(
-                                              netAmountToReceive,
-                                            );
-                                          })
-                                          .catchError((error) {
-                                            if (mounted) {
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    error
-                                                        .toString()
-                                                        .replaceFirst(
-                                                          "Exception: ",
-                                                          "",
-                                                        ),
-                                                  ),
-                                                  backgroundColor:
-                                                      Colors.redAccent,
-                                                  behavior:
-                                                      SnackBarBehavior.floating,
+                                      try {
+                                        await provider.requestWithdrawal(
+                                          requestedAmount,
+                                          context,
+                                        );
+                                        _showSuccessDialogAfterWithdrawal(
+                                          netAmountToReceive,
+                                        );
+                                      } catch (error) {
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                error.toString().replaceFirst(
+                                                  "Exception: ",
+                                                  "",
                                                 ),
-                                              );
-                                            }
-                                          });
+                                              ),
+                                              backgroundColor: Colors.redAccent,
+                                              behavior:
+                                                  SnackBarBehavior.floating,
+                                            ),
+                                          );
+                                        }
+                                      }
                                     }
                                   }
                                   : null,
@@ -407,6 +495,25 @@ class _WalletScreenState extends State<WalletScreen> {
         );
       },
     );
+  }
+
+  // --- SALDO FLUTUANTE DO PERÍODO ---
+  double _calculateFilteredPeriodEndOnlineBalance(WalletProvider provider) {
+    // Mostra o saldo online no FIM do período filtrado
+    if (provider.filteredTransactions.isEmpty) return provider.onlineBalance;
+    final List<WalletTransaction> ordered = [...provider.transactions];
+    ordered.sort((a, b) => b.date.compareTo(a.date)); // Mais recente primeiro
+    double saldo = provider.onlineBalance;
+    // Pega o mais antigo do filtro
+    final lastTx = provider.filteredTransactions.last;
+    for (final tx in ordered) {
+      if (tx == lastTx) break;
+      if (tx.type == TransactionType.creditOnlineEarning ||
+          tx.type == TransactionType.debitWithdrawalFromOnline) {
+        saldo -= tx.amount;
+      }
+    }
+    return saldo;
   }
 
   Widget _buildDetailRowSheet(
@@ -452,6 +559,9 @@ class _WalletScreenState extends State<WalletScreen> {
     final walletProvider = Provider.of<WalletProvider>(context);
     const Color primaryColor = Color(0xFF009688);
     const Color primaryColorDark = Color(0xFF00796B);
+
+    final double periodEndOnlineBalance =
+        _calculateFilteredPeriodEndOnlineBalance(walletProvider);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -592,7 +702,7 @@ class _WalletScreenState extends State<WalletScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Saldo Bruto', // Referente a comissão bruta
+                              'Saldo Bruto',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.white.withOpacity(0.85),
@@ -672,7 +782,7 @@ class _WalletScreenState extends State<WalletScreen> {
                         walletProvider.onlineBalance > 0
                             ? () =>
                                 _showWithdrawalDialog(context, walletProvider)
-                            : null, // Desabilitar se saldo for 0
+                            : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
                       foregroundColor: Colors.white,
@@ -680,28 +790,80 @@ class _WalletScreenState extends State<WalletScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      disabledBackgroundColor:
-                          Colors.grey.shade400, // Cor quando desabilitado
+                      disabledBackgroundColor: Colors.grey.shade400,
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 32),
-            const Text(
-              'Últimas Movimentações',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
+            // --- TÍTULO + BOTÃO DE FILTRO ---
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Últimas Movimentações',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.filter_list_rounded),
+                  label: Text(_getFilterButtonText(walletProvider)),
+                  onPressed: () => _showFilterOptions(context, walletProvider),
+                  style: TextButton.styleFrom(foregroundColor: Colors.black),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
-            if (walletProvider.isLoading && walletProvider.transactions.isEmpty)
+
+            // --- SALDO FLUTUANTE DO PERÍODO ---
+            if (walletProvider.filteredTransactions.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10.0, left: 4, right: 4),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 7,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "Saldo no fim do período",
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        _currencyFormatter.format(periodEndOnlineBalance),
+                        style: TextStyle(
+                          color: Colors.blueGrey[800],
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            if (walletProvider.isLoading &&
+                walletProvider.filteredTransactions.isEmpty)
               const Center(
                 child: CircularProgressIndicator(color: primaryColor),
               )
-            else if (walletProvider.transactions.isEmpty)
+            else if (walletProvider.filteredTransactions.isEmpty)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 20.0),
@@ -715,7 +877,7 @@ class _WalletScreenState extends State<WalletScreen> {
               ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: walletProvider.transactions.length,
+                itemCount: walletProvider.filteredTransactions.length,
                 separatorBuilder:
                     (_, __) => Divider(
                       color: Colors.grey.shade200,
@@ -724,7 +886,7 @@ class _WalletScreenState extends State<WalletScreen> {
                       endIndent: 16,
                     ),
                 itemBuilder: (ctx, index) {
-                  final tx = walletProvider.transactions[index];
+                  final tx = walletProvider.filteredTransactions[index];
                   IconData txIcon = Icons.receipt_long_outlined;
                   Color txColor = Colors.grey.shade700;
 

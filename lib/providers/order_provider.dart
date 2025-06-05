@@ -1,4 +1,3 @@
-// lib/providers/order_provider.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -9,6 +8,7 @@ import 'package:levva_entregador/models/order_model.dart';
 import 'package:levva_entregador/models/vehicle_type_enum.dart';
 import 'package:levva_entregador/providers/auth_provider.dart';
 import 'package:levva_entregador/providers/wallet_provider.dart';
+import 'package:levva_entregador/services/local_notification_service.dart';
 
 class OrderProvider with ChangeNotifier {
   final AuthProvider authProvider;
@@ -30,6 +30,8 @@ class OrderProvider with ChangeNotifier {
   static const String _activeOrderPrefKey = 'active_ride_order';
   bool _isInitializing = true;
 
+  Order? _orderToRateAfterCompletion;
+
   OrderProvider(this.authProvider, this.walletProvider) {
     authProvider.addListener(_handleAuthProviderChanges);
     _initializeProvider();
@@ -43,7 +45,6 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  // Getters
   bool get isOnline => _isOnline;
   Order? get currentOfferedOrder => _currentOfferedOrder;
   Order? get activeOrder => _activeOrder;
@@ -52,8 +53,8 @@ class OrderProvider with ChangeNotifier {
   int get remainingWaitTime => _remainingWaitTime;
   bool get canCancelAfterWait => _canCancelAfterWait;
   bool get isInitializing => _isInitializing;
+  Order? get orderToRate => _orderToRateAfterCompletion;
 
-  // Mock de dados (CORRIGIDO com recipientPhoneNumber para gerar o confirmationCode)
   final List<Order> _availableOrdersPool = [
     Order(id: 'orderP001', type: OrderType.package, pickupAddress: 'Loja Pequena - Av. C, 3', deliveryAddress: 'Escritório Y - Av. D, 4', estimatedValue: 7.00, distanceToPickup: 0.5, routeDistance: 1.5, creationTime: DateTime.now(), customerName: 'Cliente Y', paymentMethod: PaymentMethod.online, recipientPhoneNumber: "34999991234"),
     Order(id: 'orderF001', type: OrderType.food, pickupAddress: 'Pizza Place - Rua A, 1', deliveryAddress: 'Casa Cliente X - Rua B, 2', estimatedValue: 10.00, distanceToPickup: 1.0, routeDistance: 2.0, creationTime: DateTime.now(), storeName: 'Pizza Place', items: ['Pizza P'], paymentMethod: PaymentMethod.online, recipientPhoneNumber: "34988885678"),
@@ -64,7 +65,6 @@ class OrderProvider with ChangeNotifier {
   ];
   int _nextOrderIndex = 0;
 
-  // --- MÉTODOS DE PERSISTÊNCIA ---
   Future<void> _saveActiveOrderToPrefs() async {
     if (_isDisposed) return;
     try {
@@ -92,7 +92,7 @@ class OrderProvider with ChangeNotifier {
 
         if (_activeOrder != null && (_activeOrder!.status == OrderStatus.completed || _activeOrder!.status.name.toLowerCase().contains('cancel'))) {
           if (kDebugMode) print("OrderProvider: Pedido carregado já está finalizado. Limpando.");
-          await _clearActiveOrderFromPrefs();
+          await _clearActiveOrderFromPrefs(); 
         }
       } else {
         _activeOrder = null;
@@ -115,14 +115,13 @@ class OrderProvider with ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_activeOrderPrefKey);
-      _activeOrder = null;
+      _activeOrder = null; 
       if (kDebugMode) print("OrderProvider: Pedido ativo LIMPO das prefs e da memória.");
     } catch (e) {
       if (kDebugMode) print("OrderProvider: Erro ao limpar pedido ativo das prefs: $e");
     }
   }
 
-  // --- LÓGICA DE ESTADO ---
   void rehydratePreviousState(OrderProvider? previousProvider) {
     if (_isDisposed || previousProvider == null) return;
     _isOnline = previousProvider._isOnline;
@@ -143,7 +142,6 @@ class OrderProvider with ChangeNotifier {
     super.dispose();
   }
 
-  // --- CONTROLE DE TIMERS E EVENTOS ---
   void _startWaitTimer() {
     if (_isDisposed) return;
     _waitTimer?.cancel();
@@ -186,7 +184,6 @@ class OrderProvider with ChangeNotifier {
     await updateActiveOrderStatus(OrderStatus.completed);
   }
 
-  // --- AÇÕES PRINCIPAIS DO PROVIDER ---
   Future<void> updateActiveOrderStatus(OrderStatus newStatus) async {
     if (_isDisposed || _activeOrder == null) return;
 
@@ -200,7 +197,6 @@ class OrderProvider with ChangeNotifier {
       _stopWaitTimer();
     }
     
-    // CORREÇÃO: Status é mutável, então podemos alterá-lo diretamente.
     orderToUpdate.status = newStatus;
 
     bool orderHasEnded = newStatus == OrderStatus.completed || newStatus.name.toLowerCase().contains('cancel');
@@ -210,6 +206,7 @@ class OrderProvider with ChangeNotifier {
       _orderHistory.insert(0, orderToUpdate);
       if (newStatus == OrderStatus.completed) {
         walletProvider.addTransactionForOrderCompletion(orderToUpdate);
+        _orderToRateAfterCompletion = orderToUpdate;
       }
       await _clearActiveOrderFromPrefs();
     } else {
@@ -222,7 +219,7 @@ class OrderProvider with ChangeNotifier {
       _simulateStoreConfirmation();
     }
 
-    if (orderHasEnded) {
+    if (orderHasEnded && newStatus != OrderStatus.completed) {
       _postCompletionTimer?.cancel();
       _postCompletionTimer = Timer(const Duration(seconds: 3), () {
         if (_isOnline && authProvider.currentDriver != null && _activeOrder == null && _currentOfferedOrder == null) { 
@@ -232,10 +229,39 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
+  Future<void> enviarAvaliacaoCliente({
+    required String orderId,
+    required int rating,
+    required List<String> motivos,
+    required String comentario,
+    required bool bloquear,
+    String? avaliadoUserId,
+    String? avaliadorId,
+  }) async {
+    debugPrint('[SIMULAÇÃO] Avaliação enviada: '
+        'orderId=$orderId, rating=$rating, motivos=$motivos, '
+        'comentario=$comentario, bloquear=$bloquear, '
+        'avaliadoUserId=$avaliadoUserId, avaliadorId=$avaliadorId');
+    _orderToRateAfterCompletion = null;
+    if (_isOnline && authProvider.currentDriver != null && _activeOrder == null && _currentOfferedOrder == null) {
+      _searchForOrders();
+    }
+    if (!_isDisposed) notifyListeners();
+  }
+
+  void clearOrderFromRating() {
+    if (_isDisposed) return;
+    if (kDebugMode) print("OrderProvider: Pedido ${_orderToRateAfterCompletion?.id} pulado/removido da avaliação.");
+    _orderToRateAfterCompletion = null;
+    if (_isOnline && authProvider.currentDriver != null && _activeOrder == null && _currentOfferedOrder == null) {
+      _searchForOrders();
+    }
+    if (!_isDisposed) notifyListeners();
+  }
+
   Future<bool> confirmDeliveryWithCode(String code) async {
     if (_isDisposed || _activeOrder == null) return false;
     
-    // Agora `_activeOrder!.confirmationCode` vai funcionar porque `recipientPhoneNumber` existe.
     final String? correctCode = _activeOrder!.confirmationCode;
 
     if (correctCode == null) {
@@ -262,7 +288,6 @@ class OrderProvider with ChangeNotifier {
     _orderAcceptanceTimer?.cancel();
 
     _activeOrder = _currentOfferedOrder;
-    // CORREÇÃO: Alterando o status diretamente.
     _activeOrder!.status = OrderStatus.toPickup;
     _currentOfferedOrder = null;
     
@@ -363,6 +388,11 @@ class OrderProvider with ChangeNotifier {
         _currentOfferedOrder = foundOrder;
         _timeToAcceptOrder = 90;
         _startOrderAcceptanceTimer();
+        // --- SIMULAÇÃO DE NOTIFICAÇÃO PUSH ---
+        LocalNotificationService.showNotification(
+          title: "Novo pedido disponível!",
+          body: "Pedido de ${foundOrder.type.name} para ${foundOrder.pickupAddress}",
+        );
         if (!_isDisposed) notifyListeners();
       } else {
         if (kDebugMode) print("OrderProvider: Nenhum pedido adequado encontrado, próxima busca em 7s.");
@@ -396,7 +426,6 @@ class OrderProvider with ChangeNotifier {
     
     _orderAcceptanceTimer?.cancel();
     
-    // CORREÇÃO: Alterando o status diretamente.
     rejectedOrder.status = autoRejected ? OrderStatus.cancelledBySystem : OrderStatus.cancelledByDriver;
     
     _orderHistory.insert(0, rejectedOrder);

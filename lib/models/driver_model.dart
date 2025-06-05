@@ -28,26 +28,40 @@ class Driver {
     this.rating = 5.0,
     List<OrderType>? preferredServiceTypes,
     List<PaymentMethod>? preferredPaymentMethods, // Parâmetro adicionado
-  })  : preferredServiceTypes = preferredServiceTypes ?? [OrderType.food, OrderType.package, OrderType.moto],
-        preferredPaymentMethods = preferredPaymentMethods ?? [PaymentMethod.online, PaymentMethod.cash, PaymentMethod.cardMachine]; // Inicialização adicionada
+  }) : preferredServiceTypes =
+           preferredServiceTypes ??
+           [OrderType.food, OrderType.package, OrderType.moto],
+       preferredPaymentMethods =
+           preferredPaymentMethods ??
+           [
+             PaymentMethod.online,
+             PaymentMethod.cash,
+             PaymentMethod.cardMachine,
+           ]; // Inicialização adicionada
 
   factory Driver.fromMap(Map<String, dynamic> data, String documentId) {
     List<PaymentMethod> parsedPaymentMethods = [];
-    if (data['preferredPaymentMethods'] != null && data['preferredPaymentMethods'] is List) {
-      parsedPaymentMethods = (data['preferredPaymentMethods'] as List<dynamic>)
-          .map((methodStr) {
-            try {
-              return PaymentMethod.values.firstWhere((e) => e.name == methodStr.toString());
-            } catch (e) {
-              if (kDebugMode) {
-                print('Valor de PaymentMethod inválido "$methodStr" encontrado para o driver $documentId. Será ignorado.');
-              }
-              return null; 
-            }
-          })
-          .where((method) => method != null) 
-          .toList()
-          .cast<PaymentMethod>();
+    if (data['preferredPaymentMethods'] != null &&
+        data['preferredPaymentMethods'] is List) {
+      parsedPaymentMethods =
+          (data['preferredPaymentMethods'] as List<dynamic>)
+              .map((methodStr) {
+                try {
+                  return PaymentMethod.values.firstWhere(
+                    (e) => e.name == methodStr.toString(),
+                  );
+                } catch (e) {
+                  if (kDebugMode) {
+                    print(
+                      'Valor de PaymentMethod inválido "$methodStr" encontrado para o driver $documentId. Será ignorado.',
+                    );
+                  }
+                  return null;
+                }
+              })
+              .where((method) => method != null)
+              .toList()
+              .cast<PaymentMethod>();
     }
 
     return Driver(
@@ -63,17 +77,25 @@ class Driver {
       licensePlate: data['licensePlate'],
       profileImageUrl: data['profileImageUrl'],
       rating: (data['rating'] as num?)?.toDouble() ?? 5.0,
-      preferredServiceTypes: (data['preferredServiceTypes'] as List<dynamic>?)
-              ?.map((typeStr) => OrderType.values.firstWhere(
-                    (e) => e.name == typeStr,
-                    orElse: () => OrderType.unknown,
-                  ))
+      preferredServiceTypes:
+          (data['preferredServiceTypes'] as List<dynamic>?)
+              ?.map(
+                (typeStr) => OrderType.values.firstWhere(
+                  (e) => e.name == typeStr,
+                  orElse: () => OrderType.unknown,
+                ),
+              )
               .where((type) => type != OrderType.unknown)
               .toList() ??
           [OrderType.food, OrderType.package, OrderType.moto],
-      preferredPaymentMethods: parsedPaymentMethods.isNotEmpty 
-                                 ? parsedPaymentMethods 
-                                 : [PaymentMethod.online, PaymentMethod.cash, PaymentMethod.cardMachine], // Lógica de desserialização e fallback
+      preferredPaymentMethods:
+          parsedPaymentMethods.isNotEmpty
+              ? parsedPaymentMethods
+              : [
+                PaymentMethod.online,
+                PaymentMethod.cash,
+                PaymentMethod.cardMachine,
+              ], // Lógica de desserialização e fallback
     );
   }
 
@@ -87,8 +109,12 @@ class Driver {
       'licensePlate': licensePlate,
       'profileImageUrl': profileImageUrl,
       'rating': rating,
-      'preferredServiceTypes': preferredServiceTypes.map((type) => type.name).toList(),
-      'preferredPaymentMethods': preferredPaymentMethods.map((method) => method.name).toList(), // Serialização adicionada
+      'preferredServiceTypes':
+          preferredServiceTypes.map((type) => type.name).toList(),
+      'preferredPaymentMethods':
+          preferredPaymentMethods
+              .map((method) => method.name)
+              .toList(), // Serialização adicionada
     };
   }
 }

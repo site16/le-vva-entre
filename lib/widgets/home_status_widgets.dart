@@ -121,17 +121,6 @@ class _NewOrderOfferPanelState extends State<NewOrderOfferPanel> {
     }
   }
 
-  IconData _getVehicleIconForInfo(VehicleType? type) {
-    /* ... como antes ... */
-    switch (type) {
-      case VehicleType.moto:
-        return Icons.motorcycle;
-      case VehicleType.bike:
-        return Icons.directions_bike;
-      default:
-        return Icons.drive_eta_outlined;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {

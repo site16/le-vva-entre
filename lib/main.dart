@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -8,7 +7,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'providers/auth_provider.dart';
 import 'providers/order_provider.dart';
 import 'providers/wallet_provider.dart';
-import 'providers/history_provider.dart'; 
+import 'providers/history_provider.dart';
+import 'providers/notification_provider.dart'; // <-- Adicionado
 
 // Importações das Telas
 import 'screens/login_screen.dart';
@@ -20,10 +20,15 @@ import 'screens/history_screen.dart';
 import 'screens/terms_of_use_screen.dart';
 import 'screens/help_screen.dart';
 import 'screens/sos_screen.dart';
+import 'screens/notification_screen.dart'; // <-- Adicionado
+
+// Notificações locais (simulação de push)
+import 'services/local_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('pt_BR', null); 
+  await initializeDateFormatting('pt_BR', null);
+  await LocalNotificationService.init(); // Inicializa notificações locais
   runApp(const LevvaEntregadorApp());
 }
 
@@ -38,6 +43,7 @@ class LevvaEntregadorApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => WalletProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()), // <-- Adicionado
         ChangeNotifierProxyProvider2<AuthProvider, WalletProvider, OrderProvider>(
           create: (context) {
             final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -56,26 +62,21 @@ class LevvaEntregadorApp extends StatelessWidget {
             return HistoryProvider(orderProvider);
           },
           update: (context, orderProvider, previousHistoryProvider) {
-            // REUTILIZA a instância de previousHistoryProvider e atualiza sua dependência
             if (previousHistoryProvider == null) {
-              // Isso não deve acontecer se 'create' foi chamado corretamente, mas é uma salvaguarda.
               final initialOrderProvider = Provider.of<OrderProvider>(context, listen: false);
               return HistoryProvider(initialOrderProvider);
             }
             previousHistoryProvider.updateOrderProvider(orderProvider);
-            return previousHistoryProvider; // Retorna a mesma instância atualizada
+            return previousHistoryProvider;
           },
-          // O dispose do HistoryProvider será chamado automaticamente pelo Provider
-          // quando o próprio HistoryProvider for removido da árvore de widgets.
-          // O dispose do HistoryProvider (que remove o listener do _orderProvider) é suficiente.
         ),
       ],
       child: MaterialApp(
         title: 'Levva Entregador',
-        theme: ThemeData( // Seu ThemeData aqui
+        theme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(
-            seedColor: primaryColor,
+            seedColor: const Color(0xFF009688),
             primary: primaryColor,
             onPrimary: Colors.white,
             secondary: Colors.amber,
@@ -148,7 +149,7 @@ class LevvaEntregadorApp extends StatelessWidget {
           ),
           bottomNavigationBarTheme: BottomNavigationBarThemeData(
             backgroundColor: Colors.white,
-            selectedItemColor: primaryColor,
+            selectedItemColor: const Color(0xFF009688),
             unselectedItemColor: Colors.grey.shade600,
             selectedLabelStyle: const TextStyle(
               fontWeight: FontWeight.w600,
@@ -173,9 +174,9 @@ class LevvaEntregadorApp extends StatelessWidget {
         ],
         supportedLocales: const [
           Locale('pt', 'BR'),
-          Locale('en', 'US'), 
+          Locale('en', 'US'),
         ],
-        locale: const Locale('pt', 'BR'), 
+        locale: const Locale('pt', 'BR'),
         initialRoute: '/login',
         routes: {
           '/login': (context) => const LoginScreen(),
@@ -187,6 +188,7 @@ class LevvaEntregadorApp extends StatelessWidget {
           TermsOfUseScreen.routeName: (context) => const TermsOfUseScreen(),
           HelpScreen.routeName: (context) => const HelpScreen(),
           SosScreen.routeName: (context) => const SosScreen(),
+          NotificationScreen.routeName: (context) => const NotificationScreen(), // <-- Adicionado
         },
       ),
     );

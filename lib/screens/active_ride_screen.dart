@@ -1,4 +1,3 @@
-// lib/screens/active_ride_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:levva_entregador/models/order_model.dart';
@@ -6,8 +5,9 @@ import 'package:levva_entregador/providers/order_provider.dart';
 import 'package:levva_entregador/widgets/swipe_to_confirm_button.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter/foundation.dart'; // Para kDebugMode
-import 'package:lottie/lottie.dart'; // IMPORTAR PACOTE LOTTIE
+import 'package:flutter/foundation.dart';
+import 'package:lottie/lottie.dart';
+import 'package:levva_entregador/widgets/user_rating_dialog.dart';
 
 class ActiveRideScreen extends StatefulWidget {
   static const routeName = '/active_ride';
@@ -82,11 +82,10 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
             children: [
               Lottie.asset(
                 'assets/animations/valeu.json',
-                // <<< TAMANHO DA ANIMAÇÃO AUMENTADO >>>
-                height: 100, 
-                width: 100,  
+                height: 100,
+                width: 100,
                 fit: BoxFit.contain,
-                repeat: false, 
+                repeat: false,
                 errorBuilder: (context, error, stackTrace) {
                   return Icon(
                     Icons.check_circle_outline_rounded,
@@ -124,10 +123,25 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
               ),
               child: const Text('Ótimo!'),
-              onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop();
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                // Exibe a avaliação antes de navegar para a Home!
+                await showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (ctx) => UserRatingDialog(
+                    userName: completedOrder.customerName ?? "Cliente",
+                    onSend: (int rating, List<String> motivos, String comentario, bool bloquear) async {
+                      // TODO: Envie a avaliação para o backend
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Avaliação enviada!')),
+                      );
+                    },
+                  ),
+                );
+                if (mounted && Navigator.canPop(context)) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
               },
             ),
           ],
@@ -385,9 +399,7 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
         return "LevvaPay (Online)";
       case PaymentMethod.card:
         return "Cartão";
-      default:
-        return "Desconhecido";
-    }
+      }
   }
 
   String _getButtonLabelForStatus(OrderStatus status) {
@@ -709,9 +721,7 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
                 context,
                 orderThatJustEnded,
               );
-              if (mounted && Navigator.canPop(context)) {
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              }
+              // Não navegue para Home aqui, pois já navega no onPressed do "Ótimo!"
             } else if (orderThatJustEnded.status.name
                     .toLowerCase()
                     .contains('cancel') ||

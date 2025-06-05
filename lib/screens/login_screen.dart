@@ -1,4 +1,3 @@
-// lib/screens/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Para TextInputFormatter
 import 'package:provider/provider.dart';
@@ -12,12 +11,36 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _cpfController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
   final Color _mainAppColor = const Color(0xFF009688);
+
+  // Controller para animação de pulsar
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 900),
+      vsync: this,
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.18).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _cpfController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) {
@@ -94,17 +117,16 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Form(
                 key: _formKey,
                 child: Column(
-                  // crossAxisAlignment: CrossAxisAlignment.start, // Removido para centralizar o título
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
-                    // <<< TEXTO DE BOAS-VINDAS ALTERADO E CENTRALIZADO >>>
+                    // <<< TÍTULO CENTRALIZADO E ATUALIZADO >>>
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10.0), // Adiciona um padding lateral se necessário
+                      padding: const EdgeInsets.symmetric(horizontal: 10.0),
                       child: Text(
-                        'Eaee motoca, Vamos começar os trampos ?',
-                        textAlign: TextAlign.center, // Centraliza o texto
+                        'Eae, vamos começar os trampos?',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 24, // Ajustado para caber melhor
+                          fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: Colors.grey[850],
                         ),
@@ -112,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 35),
 
-                    // Campo CPF (mantido o alinhamento do label à esquerda por consistência)
+                    // Campo CPF
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -156,7 +178,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 25),
 
-                    // Campo Senha (mantido o alinhamento do label à esquerda)
+                    // Campo Senha
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -199,7 +221,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 40),
                     _isLoading
-                        ? Center(child: CircularProgressIndicator(color: _mainAppColor))
+                        ? Center(
+                            child: ScaleTransition(
+                              scale: _pulseAnimation,
+                              child: Image.asset(
+                                'assets/images/levva_icon_transp.png',
+                                height: 60,
+                                width: 60,
+                                color: const Color(0xFF009688),
+                                colorBlendMode: BlendMode.srcIn,
+                              ),
+                            ),
+                          )
                         : SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
