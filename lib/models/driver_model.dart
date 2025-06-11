@@ -58,6 +58,30 @@ class Driver {
              PaymentMethod.cardMachine,
            ];
 
+  /// Getter resumido para detalhes do veículo para exibir no app do usuário
+  String get vehicleDetails {
+    // Exemplo: "Moto Honda CG 160, cor preta, placa XYZ-1234"
+    List<String> parts = [];
+    if (vehicleType != VehicleType.unknown) parts.add(_vehicleTypeToString(vehicleType));
+    if (vehicleModel != null && vehicleModel!.isNotEmpty) parts.add(vehicleModel!);
+    if (vehicleColor != null && vehicleColor!.isNotEmpty) parts.add('cor $vehicleColor');
+    if (licensePlate != null && licensePlate!.isNotEmpty) parts.add('placa $licensePlate');
+    return parts.join(', ');
+  }
+
+  static String _vehicleTypeToString(VehicleType type) {
+    switch (type) {
+      case VehicleType.bike:
+        return 'Bicicleta';
+      case VehicleType.moto:
+        return 'Moto';
+      case VehicleType.car:
+        return 'Carro';  
+      case VehicleType.unknown:
+        return 'Veículo';
+    }
+  }
+
   /// Criação do modelo a partir de um DocumentSnapshot do Firestore
   factory Driver.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;

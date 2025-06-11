@@ -33,6 +33,9 @@ import 'screens/notification_screen.dart';
 // Notificações locais
 import 'services/local_notification_service.dart';
 
+// Splash/root logic para auto-login
+import 'screens/splash_or_root_screen.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR', null);
@@ -193,7 +196,7 @@ class LevvaEntregadorApp extends StatelessWidget {
           ),
           bottomNavigationBarTheme: BottomNavigationBarThemeData(
             backgroundColor: Colors.white,
-            selectedItemColor: primaryColor,
+            selectedItemColor: const Color(0xFF009688),
             unselectedItemColor: Colors.grey.shade600,
             selectedLabelStyle: const TextStyle(
               fontWeight: FontWeight.w600,
@@ -208,7 +211,7 @@ class LevvaEntregadorApp extends StatelessWidget {
           iconTheme: IconThemeData(
             color: Colors.grey[800],
           ),
-          primaryColor: primaryColor,
+          primaryColor: const Color(0xFF009688),
         ),
         debugShowCheckedModeBanner: false,
         localizationsDelegates: const [
@@ -221,9 +224,8 @@ class LevvaEntregadorApp extends StatelessWidget {
           Locale('en', 'US'),
         ],
         locale: const Locale('pt', 'BR'),
-        initialRoute: '/login',
+        home: const SplashOrRootScreen(), // Troca inicialRoute por home para auto-login
         routes: {
-          '/login': (context) => const LoginScreen(),
           HomeScreen.routeName: (context) => const HomeScreen(),
           ActiveRideScreen.routeName: (context) => const ActiveRideScreen(),
           ProfileScreen.routeName: (context) => const ProfileScreen(),
@@ -233,6 +235,7 @@ class LevvaEntregadorApp extends StatelessWidget {
           HelpScreen.routeName: (context) => const HelpScreen(),
           SosScreen.routeName: (context) => const SosScreen(),
           NotificationScreen.routeName: (context) => const NotificationScreen(),
+          LoginScreen.routeName: (context) => const LoginScreen(),
         },
       ),
     );

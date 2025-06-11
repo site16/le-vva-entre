@@ -124,7 +124,10 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green.shade700,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 30,
+                  vertical: 12,
+                ),
               ),
               child: const Text('Ótimo!'),
               onPressed: () async {
@@ -133,15 +136,21 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
                 await showDialog(
                   context: context,
                   barrierDismissible: false,
-                  builder: (ctx) => UserRatingDialog(
-                    userName: completedOrder.customerName ?? "Cliente",
-                    onSend: (int rating, List<String> motivos, String comentario, bool bloquear) async {
-                      // TODO: Envie a avaliação para o backend
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Avaliação enviada!')),
-                      );
-                    },
-                  ),
+                  builder:
+                      (ctx) => UserRatingDialog(
+                        userName: completedOrder.customerName ?? "Cliente",
+                        onSend: (
+                          int rating,
+                          List<String> motivos,
+                          String comentario,
+                          bool bloquear,
+                        ) async {
+                          // TODO: Envie a avaliação para o backend
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Avaliação enviada!')),
+                          );
+                        },
+                      ),
                 );
                 if (mounted && Navigator.canPop(context)) {
                   Navigator.of(context).popUntil((route) => route.isFirst);
@@ -348,8 +357,16 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
         await provider.updateActiveOrderStatus(OrderStatus.atDelivery);
         break;
       case OrderStatus.atDelivery:
-        if (!mounted) return;
-        // Implemente a lógica de confirmação (código, pagamento, etc.) aqui
+        // PACOTE/OBJETO exige código!
+        if (activeOrderSnapshot.type == OrderType.package) {
+          await _showPackageCodeDialog(provider, activeOrderSnapshot);
+        } else if (activeOrderSnapshot.paymentMethod == PaymentMethod.cash ||
+            activeOrderSnapshot.paymentMethod == PaymentMethod.cardMachine) {
+          await _showConfirmReceivedDialog(provider, activeOrderSnapshot);
+        } else {
+          // Pagamento online: finaliza direto
+          await provider.updateActiveOrderStatus(OrderStatus.completed);
+        }
         break;
       case OrderStatus.returningToStore:
         await provider.updateActiveOrderStatus(
@@ -361,6 +378,129 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
         return;
       default:
         return;
+    }
+  }
+
+  Future<void> _showPackageCodeDialog(
+    OrderProvider provider,
+    Order activeOrder,
+  ) async {
+    final TextEditingController _codeController = TextEditingController();
+    // Use sempre o campo confirmationCode para garantir compatibilidade
+    final String? expectedCode = activeOrder.confirmationCode;
+
+    bool success = false;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Confirmação de Entrega'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Para finalizar a entrega, peça ao destinatário os 4 últimos dígitos do telefone dele e digite abaixo:',
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _codeController,
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Últimos 4 dígitos',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (_codeController.text.trim() == (expectedCode ?? '')) {
+                    success = true;
+                    Navigator.of(context).pop();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Código incorreto!'),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Confirmar'),
+              ),
+            ],
+          ),
+    );
+
+    if (success) {
+      // Depois do código correto, segue o fluxo de pagamento normalmente
+      if (activeOrder.paymentMethod == PaymentMethod.cash ||
+          activeOrder.paymentMethod == PaymentMethod.cardMachine) {
+        await _showConfirmReceivedDialog(provider, activeOrder);
+      } else {
+        await provider.updateActiveOrderStatus(OrderStatus.completed);
+      }
+    }
+  }
+
+  Future<void> _showConfirmReceivedDialog(
+    OrderProvider provider,
+    Order activeOrder,
+  ) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Você recebeu o valor?'),
+            content: const Text(
+              'Confirme se você recebeu o valor do pedido (dinheiro ou maquininha) antes de finalizar a entrega.',
+            ),
+            actions: [
+              TextButton(
+                child: const Text('Não'),
+                onPressed: () => Navigator.of(context).pop(false),
+              ),
+              ElevatedButton(
+                child: const Text('Sim'),
+                onPressed: () => Navigator.of(context).pop(true),
+              ),
+            ],
+          ),
+    );
+
+    if (result == true) {
+      // Finaliza entrega normalmente
+      await provider.updateActiveOrderStatus(OrderStatus.completed);
+    } else if (result == false) {
+      // Mostra orientação para o entregador
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder:
+              (ctx) => AlertDialog(
+                title: const Text('Atenção!'),
+                content: const Text(
+                  'Não finalize a entrega enquanto não receber o valor. '
+                  'Se houver problemas, entre em contato com o suporte.',
+                ),
+                actions: [
+                  TextButton(
+                    child: const Text('Entendi'),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+        );
+      }
     }
   }
 
@@ -396,9 +536,9 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
         .toString()
         .padLeft(2, '0');
     final seconds = (provider.remainingWaitTime % 60).toString().padLeft(
-          2,
-          '0',
-        );
+      2,
+      '0',
+    );
     return Column(
       key: const ValueKey('waitingUI'),
       mainAxisSize: MainAxisSize.min,
@@ -408,9 +548,10 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: provider.remainingWaitTime < 60
-                ? Colors.red.shade700
-                : Theme.of(context).primaryColorDark,
+            color:
+                provider.remainingWaitTime < 60
+                    ? Colors.red.shade700
+                    : Theme.of(context).primaryColorDark,
           ),
         ),
         const SizedBox(height: 8),
@@ -500,13 +641,10 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           if (mounted) {
             if (orderThatJustEnded.status == OrderStatus.completed) {
-              await _showRideCompletionDialog(
-                context,
-                orderThatJustEnded,
-              );
-            } else if (orderThatJustEnded.status.name
-                    .toLowerCase()
-                    .contains('cancel') ||
+              await _showRideCompletionDialog(context, orderThatJustEnded);
+            } else if (orderThatJustEnded.status.name.toLowerCase().contains(
+                  'cancel',
+                ) ||
                 orderThatJustEnded.status ==
                     OrderStatus.cancellationRequested) {
               if (Navigator.canPop(context)) {
@@ -569,12 +707,15 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
             currentActiveOrder.pickupLongitude!,
           ),
           infoWindow: gmaps.InfoWindow(
-            title: currentActiveOrder.type == OrderType.food
-                ? (currentActiveOrder.storeName ?? "Loja Parceira")
-                : "Remetente",
+            title:
+                currentActiveOrder.type == OrderType.food
+                    ? (currentActiveOrder.storeName ?? "Loja Parceira")
+                    : "Remetente",
             snippet: "Coleta",
           ),
-          icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(gmaps.BitmapDescriptor.hueGreen),
+          icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(
+            gmaps.BitmapDescriptor.hueGreen,
+          ),
         ),
       );
     }
@@ -593,7 +734,9 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
             title: currentActiveOrder.customerName ?? "Cliente",
             snippet: "Entrega",
           ),
-          icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(gmaps.BitmapDescriptor.hueRed),
+          icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(
+            gmaps.BitmapDescriptor.hueRed,
+          ),
         ),
       );
     }
@@ -666,8 +809,8 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
             currentActiveOrder.type == OrderType.food
                 ? (currentActiveOrder.storeName ?? "Pedido de Comida")
                 : currentActiveOrder.type == OrderType.package
-                    ? "Entrega de Pacote"
-                    : "Corrida de Moto",
+                ? "Entrega de Pacote"
+                : "Corrida de Moto",
             style: const TextStyle(
               color: Colors.black,
               fontWeight: FontWeight.bold,
@@ -678,9 +821,9 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
             if (currentActiveOrder.status !=
                     OrderStatus.cancellationRequested &&
                 currentActiveOrder.status != OrderStatus.completed &&
-                !currentActiveOrder.status.name
-                    .toLowerCase()
-                    .contains('cancel'))
+                !currentActiveOrder.status.name.toLowerCase().contains(
+                  'cancel',
+                ))
               IconButton(
                 icon: const Icon(
                   Icons.cancel_outlined,
@@ -713,22 +856,21 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
               ) {
                 bool isPickupPhase =
                     currentActiveOrder.status == OrderStatus.toPickup ||
-                        currentActiveOrder.status ==
-                            OrderStatus.awaitingPickup ||
-                        currentActiveOrder.status == OrderStatus.atPickup;
+                    currentActiveOrder.status == OrderStatus.awaitingPickup ||
+                    currentActiveOrder.status == OrderStatus.atPickup;
                 String destinationName, role, address;
 
-                if (currentActiveOrder.status ==
-                    OrderStatus.returningToStore) {
+                if (currentActiveOrder.status == OrderStatus.returningToStore) {
                   address = currentActiveOrder.pickupAddress;
                   role = "Retorno à Loja";
                   destinationName =
                       currentActiveOrder.storeName ?? "Loja Parceira";
                 } else if (isPickupPhase) {
                   address = currentActiveOrder.pickupAddress;
-                  role = currentActiveOrder.type == OrderType.food
-                      ? "Loja"
-                      : "Remetente";
+                  role =
+                      currentActiveOrder.type == OrderType.food
+                          ? "Loja"
+                          : "Remetente";
                   destinationName =
                       currentActiveOrder.type == OrderType.food
                           ? (currentActiveOrder.storeName ?? 'Loja Parceira')
@@ -771,15 +913,16 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
                       ),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 400),
-                        transitionBuilder: (child, animation) =>
-                            FadeTransition(
-                          opacity: animation,
-                          child: child,
-                        ),
-                        child: currentActiveOrder.status ==
-                                OrderStatus.awaitingStoreConfirmation
-                            ? _buildAwaitingStoreConfirmationUI()
-                            : currentActiveOrder.status ==
+                        transitionBuilder:
+                            (child, animation) => FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            ),
+                        child:
+                            currentActiveOrder.status ==
+                                    OrderStatus.awaitingStoreConfirmation
+                                ? _buildAwaitingStoreConfirmationUI()
+                                : currentActiveOrder.status ==
                                     OrderStatus.awaitingPickup
                                 ? _buildWaitingForPickupUI(orderProvider)
                                 : _buildDefaultETA_UI(currentActiveOrder),
@@ -810,25 +953,29 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
                               ],
                             ),
                           ),
-                          Row(children: [
-                            IconButton(
+                          Row(
+                            children: [
+                              IconButton(
                                 icon: const Icon(Icons.chat_bubble_outline),
                                 onPressed: _openChat,
-                                tooltip: "Abrir chat"),
-                            IconButton(
+                                tooltip: "Abrir chat",
+                              ),
+                              IconButton(
                                 icon: const Icon(Icons.phone_outlined),
                                 onPressed: _openPhone,
-                                tooltip: "Ligar"),
-                            IconButton(
+                                tooltip: "Ligar",
+                              ),
+                              IconButton(
                                 icon: const Icon(Icons.near_me_outlined),
                                 onPressed: () => _openMap(address),
-                                tooltip: 'Ir com o mapa'),
-                          ]),
+                                tooltip: 'Ir com o mapa',
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                       Padding(
-                        padding:
-                            const EdgeInsets.only(top: 8.0, bottom: 12.0),
+                        padding: const EdgeInsets.only(top: 8.0, bottom: 12.0),
                         child: Text(
                           address,
                           style: TextStyle(
@@ -846,27 +993,29 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
                           color: Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(
-                            Icons.payments_outlined,
-                            size: 18,
-                            color: Colors.grey.shade700,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _getPaymentMethodText(
-                              currentActiveOrder.paymentMethod,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.payments_outlined,
+                              size: 18,
+                              color: Colors.grey.shade700,
                             ),
-                            style: TextStyle(
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade800,
+                            const SizedBox(width: 8),
+                            Text(
+                              _getPaymentMethodText(
+                                currentActiveOrder.paymentMethod,
+                              ),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey.shade800,
+                              ),
                             ),
-                          ),
-                        ]),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 28),
-                      if (currentActiveOrder.status !=
-                              OrderStatus.completed &&
+                      if (currentActiveOrder.status != OrderStatus.completed &&
                           currentActiveOrder.status !=
                               OrderStatus.cancellationRequested &&
                           !currentActiveOrder.status.name
@@ -874,22 +1023,25 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
                               .contains('cancel'))
                         SwipeToConfirmButton(
                           key: ValueKey(
-                              currentActiveOrder.status.toString() +
-                                  currentActiveOrder.id),
+                            currentActiveOrder.status.toString() +
+                                currentActiveOrder.id,
+                          ),
                           text: _getButtonLabelForStatus(
                             currentActiveOrder.status,
                           ),
-                          onConfirm: currentActiveOrder.status ==
-                                  OrderStatus.awaitingStoreConfirmation
-                              ? () {}
-                              : () => _handleRideAction(
+                          onConfirm:
+                              currentActiveOrder.status ==
+                                      OrderStatus.awaitingStoreConfirmation
+                                  ? () {}
+                                  : () => _handleRideAction(
                                     orderProvider,
                                     currentActiveOrder,
                                   ),
-                          trackColor: currentActiveOrder.status ==
-                                  OrderStatus.awaitingStoreConfirmation
-                              ? Colors.grey.shade400
-                              : Theme.of(context).primaryColor,
+                          trackColor:
+                              currentActiveOrder.status ==
+                                      OrderStatus.awaitingStoreConfirmation
+                                  ? Colors.grey.shade400
+                                  : Theme.of(context).primaryColor,
                         ),
                       const SizedBox(height: 20),
                     ],

@@ -5,6 +5,8 @@ import 'package:lottie/lottie.dart';
 import '../providers/auth_provider.dart'; // adapte para seu projeto
 
 class LoginScreen extends StatefulWidget {
+  static const String routeName = '/login'; // Adicionado para navegação por nome
+
   const LoginScreen({super.key});
 
   @override

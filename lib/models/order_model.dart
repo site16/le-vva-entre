@@ -42,15 +42,14 @@ class Order {
   final String? recipientPhoneNumber;
   DateTime? waitingSince;
   final String? notes;
-
-  // Adicione o campo driverId
   final String? driverId;
-
-  // LOCALIZAÇÃO REAL
   final double? pickupLatitude;
   final double? pickupLongitude;
   final double? deliveryLatitude;
   final double? deliveryLongitude;
+
+  // Campo para o código de confirmação (os 4 últimos dígitos ou código do backend)
+  final String? confirmationCode;
 
   Order({
     required this.id,
@@ -70,14 +69,16 @@ class Order {
     this.recipientPhoneNumber,
     this.waitingSince,
     this.notes,
-    this.driverId, // novo campo
+    this.driverId,
     this.pickupLatitude,
     this.pickupLongitude,
     this.deliveryLatitude,
     this.deliveryLongitude,
+    this.confirmationCode, // <-- Usar este campo
   });
 
-  String? get confirmationCode {
+  /// Getter retrocompatível a partir do número de telefone (apenas para fallback!)
+  String? get fallbackConfirmationCode {
     if (recipientPhoneNumber != null && recipientPhoneNumber!.length >= 4) {
       return recipientPhoneNumber!.substring(recipientPhoneNumber!.length - 4);
     }
@@ -118,11 +119,12 @@ class Order {
         'recipientPhoneNumber': recipientPhoneNumber,
         'waitingSince': waitingSince,
         'notes': notes,
-        'driverId': driverId, // novo campo
+        'driverId': driverId,
         'pickupLatitude': pickupLatitude,
         'pickupLongitude': pickupLongitude,
         'deliveryLatitude': deliveryLatitude,
         'deliveryLongitude': deliveryLongitude,
+        'confirmationCode': confirmationCode, // <-- Sempre serialize como confirmationCode
       };
 
   factory Order.fromDocument(DocumentSnapshot doc) {
@@ -168,11 +170,12 @@ class Order {
               ? DateTime.tryParse(json['waitingSince'])
               : null,
       notes: json['notes'] as String?,
-      driverId: json['driverId'] as String?, // novo campo
+      driverId: json['driverId'] as String?,
       pickupLatitude: (json['pickupLatitude'] as num?)?.toDouble(),
       pickupLongitude: (json['pickupLongitude'] as num?)?.toDouble(),
       deliveryLatitude: (json['deliveryLatitude'] as num?)?.toDouble(),
       deliveryLongitude: (json['deliveryLongitude'] as num?)?.toDouble(),
+      confirmationCode: json['confirmationCode'] as String? ?? json['deliveryCode'] as String?, // <-- busca ambos para retrocompatibilidade
     );
   }
 
@@ -210,13 +213,12 @@ class Order {
       recipientPhoneNumber: json['recipientPhoneNumber'] as String?,
       waitingSince: json['waitingSince'] != null ? DateTime.parse(json['waitingSince'] as String) : null,
       notes: json['notes'] as String?,
-      driverId: json['driverId'] as String?, // novo campo
+      driverId: json['driverId'] as String?,
       pickupLatitude: (json['pickupLatitude'] as num?)?.toDouble(),
       pickupLongitude: (json['pickupLongitude'] as num?)?.toDouble(),
       deliveryLatitude: (json['deliveryLatitude'] as num?)?.toDouble(),
       deliveryLongitude: (json['deliveryLongitude'] as num?)?.toDouble(),
+      confirmationCode: json['confirmationCode'] as String? ?? json['deliveryCode'] as String?, // <-- busca ambos para retrocompatibilidade
     );
   }
-
-  // ... resto igual ...
 }

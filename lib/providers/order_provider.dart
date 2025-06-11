@@ -68,9 +68,7 @@ class OrderProvider with ChangeNotifier {
       if (_activeOrder != null) {
         await prefs.setString(_activeOrderPrefKey, _activeOrder!.id);
         if (kDebugMode)
-          print(
-            "OrderProvider: Pedido ativo SALVO nas prefs: ${_activeOrder!.id}",
-          );
+          print("OrderProvider: Pedido ativo SALVO nas prefs: ${_activeOrder!.id}");
       } else {
         await prefs.remove(_activeOrderPrefKey);
         if (kDebugMode)
@@ -87,20 +85,17 @@ class OrderProvider with ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final String? orderId = prefs.getString(_activeOrderPrefKey);
       if (orderId != null && authProvider.currentDriver != null) {
-        final doc =
-            await FirebaseFirestore.instance
-                .collection('orders')
-                .doc(orderId)
-                .get();
+        final doc = await FirebaseFirestore.instance
+            .collection('orders')
+            .doc(orderId)
+            .get();
         if (doc.exists) {
           _activeOrder = mymodels.Order.fromDocument(doc);
           if (_activeOrder != null &&
               (_activeOrder!.status == mymodels.OrderStatus.completed ||
                   _activeOrder!.status.name.toLowerCase().contains('cancel'))) {
             if (kDebugMode)
-              print(
-                "OrderProvider: Pedido carregado já está finalizado. Limpando.",
-              );
+              print("OrderProvider: Pedido carregado já está finalizado. Limpando.");
             await _clearActiveOrderFromPrefs();
           }
         }
@@ -204,13 +199,15 @@ class OrderProvider with ChangeNotifier {
       if (_isDisposed) return;
       if (doc.exists) {
         final updatedOrder = mymodels.Order.fromDocument(doc);
-        final oldStatus = _activeOrder?.status;
         _activeOrder = updatedOrder;
         // Se o status mudou para completed/cancel, limpe prefs e pare listener
         if (updatedOrder.status == mymodels.OrderStatus.completed ||
             updatedOrder.status.name.toLowerCase().contains('cancel')) {
           _orderHistory.insert(0, updatedOrder);
-          _orderToRateAfterCompletion = updatedOrder.status == mymodels.OrderStatus.completed ? updatedOrder : null;
+          _orderToRateAfterCompletion =
+              updatedOrder.status == mymodels.OrderStatus.completed
+                  ? updatedOrder
+                  : null;
           _clearActiveOrderFromPrefs();
         }
         notifyListeners();
@@ -227,7 +224,7 @@ class OrderProvider with ChangeNotifier {
     _activeOrderListener = null;
   }
 
-  /// Atualiza o status do pedido ativo no Firestore
+  /// Atualiza o status do pedido ativo no Firestore (sempre atualize campos extras!)
   Future<void> updateActiveOrderStatus(mymodels.OrderStatus newStatus) async {
     if (_isDisposed || _activeOrder == null) return;
 
@@ -251,6 +248,12 @@ class OrderProvider with ChangeNotifier {
             'status': newStatus.name,
             if (newStatus == mymodels.OrderStatus.awaitingPickup)
               'waitingSince': Timestamp.fromDate(orderToUpdate.waitingSince!),
+            if (authProvider.currentDriver != null) ...{
+              'driverId': authProvider.currentDriver!.id,
+              'driverName': authProvider.currentDriver!.name,
+              'driverVehicleDetails': authProvider.currentDriver!.vehicleDetails,
+              'driverProfileImageUrl': authProvider.currentDriver!.profileImageUrl,
+            }
           });
       orderToUpdate.status = newStatus;
     } catch (e) {
@@ -348,7 +351,7 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  /// Aceita o pedido ofertado e atualiza no Firestore, passa a escutar o pedido
+  /// Aceita o pedido ofertado e atualiza no Firestore, passa a escutar o pedido (sempre atualize campos extras!)
   Future<void> acceptOfferedOrder() async {
     if (_isDisposed || _currentOfferedOrder == null) return;
     try {
@@ -359,6 +362,9 @@ class OrderProvider with ChangeNotifier {
       await docRef.update({
         'status': mymodels.OrderStatus.toPickup.name,
         'driverId': authProvider.currentDriver?.id,
+        'driverName': authProvider.currentDriver?.name,
+        'driverVehicleDetails': authProvider.currentDriver?.vehicleDetails,
+        'driverProfileImageUrl': authProvider.currentDriver?.profileImageUrl,
       });
       _activeOrder = _currentOfferedOrder;
       _activeOrder!.status = mymodels.OrderStatus.toPickup;
@@ -548,16 +554,14 @@ class OrderProvider with ChangeNotifier {
           .collection('orders')
           .doc(rejectedOrder.id)
           .update({
-            'status':
-                autoRejected
-                    ? mymodels.OrderStatus.cancelledBySystem.name
-                    : mymodels.OrderStatus.cancelledByDriver.name,
+            'status': autoRejected
+                ? mymodels.OrderStatus.cancelledBySystem.name
+                : mymodels.OrderStatus.cancelledByDriver.name,
             'driverId': authProvider.currentDriver?.id,
           });
-      rejectedOrder.status =
-          autoRejected
-              ? mymodels.OrderStatus.cancelledBySystem
-              : mymodels.OrderStatus.cancelledByDriver;
+      rejectedOrder.status = autoRejected
+          ? mymodels.OrderStatus.cancelledBySystem
+          : mymodels.OrderStatus.cancelledByDriver;
       _orderHistory.insert(0, rejectedOrder);
       _currentOfferedOrder = null;
       if (!_isDisposed) {

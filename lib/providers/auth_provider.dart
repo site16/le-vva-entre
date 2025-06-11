@@ -12,6 +12,38 @@ class AuthProvider with ChangeNotifier {
   bool get isAuthenticated => _currentDriver != null;
   bool get isLoading => _isLoading;
 
+  AuthProvider() {
+    _initAutoLogin();
+  }
+
+  Future<void> _initAutoLogin() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final doc = await FirebaseFirestore.instance
+            .collection('drivers')
+            .doc(user.uid)
+            .get();
+        if (doc.exists) {
+          _currentDriver = Driver.fromDocument(doc);
+        } else {
+          // Usuário autenticado mas não cadastrado como driver
+          await FirebaseAuth.instance.signOut();
+          _currentDriver = null;
+        }
+      } else {
+        _currentDriver = null;
+      }
+    } catch (e) {
+      _currentDriver = null;
+    }
+    _isLoading = false;
+    notifyListeners();
+  }
+
   /// Login com e-mail e senha via Firebase Auth.
   /// Após login, busca o perfil do motorista no Firestore pelo uid.
   Future<bool> login(String email, String password) async {
