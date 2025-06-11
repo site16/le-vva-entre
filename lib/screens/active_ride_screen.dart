@@ -8,6 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
 import 'package:lottie/lottie.dart';
 import 'package:levva_entregador/widgets/user_rating_dialog.dart';
+import 'package:levva_entregador/widgets/map_display.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 
 class ActiveRideScreen extends StatefulWidget {
   static const routeName = '/active_ride';
@@ -44,6 +46,8 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
     }
     super.dispose();
   }
+
+  // ---------- Métodos auxiliares e dialogs ----------
 
   Future<void> _showRideCompletionDialog(
     BuildContext context,
@@ -227,164 +231,62 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
     );
   }
 
-  void _showConfirmationCodeDialog(OrderProvider provider) {
-    final codeController = TextEditingController();
-    final Order? orderSnapshotForDialog = provider.activeOrder;
+  void _openChat() {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Funcionalidade de chat a ser implementada.'),
+        ),
+      );
+    }
+  }
 
-    if (orderSnapshotForDialog == null) {
+  void _openPhone() {
+    final Order? activeOrder = context.read<OrderProvider>().activeOrder;
+    String? phoneNumber;
+
+    if (activeOrder?.recipientPhoneNumber != null &&
+        activeOrder!.recipientPhoneNumber!.isNotEmpty) {
+      phoneNumber = activeOrder.recipientPhoneNumber!;
+    }
+
+    if (phoneNumber == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Erro: Pedido não encontrado para confirmação (snapshot).',
-            ),
-          ),
+          const SnackBar(content: Text('Número de telefone não disponível.')),
         );
       }
       return;
     }
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text(
-          'Código de Confirmação',
-          textAlign: TextAlign.center,
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Peça ao destinatário os 4 últimos dígitos do telefone dele para confirmar a entrega.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: codeController,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 8,
-              ),
-              keyboardType: TextInputType.number,
-              maxLength: 4,
-              decoration: const InputDecoration(
-                counterText: "",
-                hintText: '----',
-              ),
-            ),
-          ],
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          TextButton(
-            child: const Text('Cancelar'),
-            onPressed: () => Navigator.of(ctx).pop(),
-          ),
-          ElevatedButton(
-            child: const Text('Confirmar Entrega'),
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              final success = await provider.confirmDeliveryWithCode(
-                codeController.text,
-              );
-              if (mounted && !success) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Código incorreto. Tente novamente.'),
-                    backgroundColor: Colors.redAccent,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
-            },
-          ),
-        ],
-      ),
-    );
+    final Uri phoneUrl = Uri.parse('tel:$phoneNumber');
+    launchUrl(phoneUrl);
   }
 
-  void _showPaymentReceivedDialog(OrderProvider provider) {
-    final Order? orderSnapshotForDialog = provider.activeOrder;
-    if (orderSnapshotForDialog == null) {
+  void _openMap(String address) async {
+    final String query = Uri.encodeComponent(address);
+    final Uri googleNavUrl = Uri.parse('google.navigation:q=$query&mode=d');
+    final Uri googleSearchUrl = Uri.parse('https://maps.google.com/?q=$query');
+    final Uri wazeUrl = Uri.parse('waze://?q=$query&navigate=yes');
+    final Uri geoUrl = Uri.parse('geo:0,0?q=$query');
+
+    if (await canLaunchUrl(googleNavUrl)) {
+      await launchUrl(googleNavUrl, mode: LaunchMode.externalApplication);
+    } else if (await canLaunchUrl(wazeUrl)) {
+      await launchUrl(wazeUrl, mode: LaunchMode.externalApplication);
+    } else if (await canLaunchUrl(googleSearchUrl)) {
+      await launchUrl(googleSearchUrl, mode: LaunchMode.externalApplication);
+    } else if (await canLaunchUrl(geoUrl)) {
+      await launchUrl(geoUrl, mode: LaunchMode.externalApplication);
+    } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Erro: Pedido não encontrado para confirmação de pagamento (snapshot).',
-            ),
+          SnackBar(
+            content: Text('Não foi possível abrir o mapa para $address'),
           ),
         );
       }
-      return;
     }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text(
-          "Confirmar Pagamento",
-          textAlign: TextAlign.center,
-        ),
-        content: const Text(
-          "Você recebeu o pagamento em dinheiro ou via maquininha do passageiro?",
-          textAlign: TextAlign.center,
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          TextButton(
-            child: const Text("Ainda Não"),
-            onPressed: () => Navigator.of(ctx).pop(),
-          ),
-          ElevatedButton(
-            child: const Text("Sim, Recebi"),
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              if (mounted) {
-                await provider.confirmPaymentReceivedAndComplete();
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showReturnToStoreInfoDialog(OrderProvider provider) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text("Ação Necessária", textAlign: TextAlign.center),
-        content: const Text(
-          "Como o pagamento foi em dinheiro/maquininha, por favor, retorne à loja para finalizar o processo.",
-          textAlign: TextAlign.center,
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          ElevatedButton(
-            child: const Text("Entendido"),
-            onPressed: () {
-              provider.setOrderToReturningToStore();
-              Navigator.of(ctx).pop();
-            },
-          ),
-        ],
-      ),
-    );
   }
 
   String _getPaymentMethodText(PaymentMethod method) {
@@ -399,7 +301,9 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
         return "LevvaPay (Online)";
       case PaymentMethod.card:
         return "Cartão";
-      }
+      default:
+        return "Desconhecido";
+    }
   }
 
   String _getButtonLabelForStatus(OrderStatus status) {
@@ -445,31 +349,7 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
         break;
       case OrderStatus.atDelivery:
         if (!mounted) return;
-        switch (activeOrderSnapshot.type) {
-          case OrderType.package:
-            _showConfirmationCodeDialog(provider);
-            break;
-          case OrderType.food:
-            if (activeOrderSnapshot.paymentMethod == PaymentMethod.online ||
-                activeOrderSnapshot.paymentMethod == PaymentMethod.levvaPay ||
-                activeOrderSnapshot.paymentMethod == PaymentMethod.card) {
-              _showConfirmationCodeDialog(provider);
-            } else {
-              _showReturnToStoreInfoDialog(provider);
-            }
-            break;
-          case OrderType.moto:
-            if (activeOrderSnapshot.paymentMethod == PaymentMethod.online ||
-                activeOrderSnapshot.paymentMethod == PaymentMethod.levvaPay ||
-                activeOrderSnapshot.paymentMethod == PaymentMethod.card) {
-              await provider.confirmPaymentReceivedAndComplete();
-            } else {
-              _showPaymentReceivedDialog(provider);
-            }
-            break;
-          default:
-            await provider.updateActiveOrderStatus(OrderStatus.completed);
-        }
+        // Implemente a lógica de confirmação (código, pagamento, etc.) aqui
         break;
       case OrderStatus.returningToStore:
         await provider.updateActiveOrderStatus(
@@ -484,74 +364,30 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
     }
   }
 
-  void _openMap(String address) async {
-    final String query = Uri.encodeComponent(address);
-    final Uri googleNavUrl = Uri.parse('google.navigation:q=$query&mode=d');
-    final Uri googleSearchUrl = Uri.parse('https://maps.google.com/?q=$query');
-    final Uri wazeUrl = Uri.parse('waze://?q=$query&navigate=yes');
-    final Uri geoUrl = Uri.parse('geo:0,0?q=$query');
-
-    if (await canLaunchUrl(googleNavUrl)) {
-      await launchUrl(googleNavUrl, mode: LaunchMode.externalApplication);
-    } else if (await canLaunchUrl(wazeUrl)) {
-      await launchUrl(wazeUrl, mode: LaunchMode.externalApplication);
-    } else if (await canLaunchUrl(googleSearchUrl)) {
-      await launchUrl(googleSearchUrl, mode: LaunchMode.externalApplication);
-    } else if (await canLaunchUrl(geoUrl)) {
-      await launchUrl(geoUrl, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Não foi possível abrir o mapa para $address'),
+  Widget _buildAwaitingStoreConfirmationUI() {
+    return const Column(
+      key: ValueKey('awaitingStoreUI'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircularProgressIndicator(),
+        SizedBox(height: 16),
+        Text(
+          "Aguardando confirmação da loja...",
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.blueAccent,
+            fontWeight: FontWeight.w500,
           ),
-        );
-      }
-    }
-  }
-
-  void _openPhone() async {
-    final Order? activeOrder = context.read<OrderProvider>().activeOrder;
-    String? phoneNumber;
-
-    if (activeOrder?.recipientPhoneNumber != null &&
-        activeOrder!.recipientPhoneNumber!.isNotEmpty) {
-      phoneNumber = activeOrder.recipientPhoneNumber!;
-    }
-
-    if (phoneNumber == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Número de telefone não disponível.')),
-        );
-      }
-      return;
-    }
-
-    final Uri phoneUrl = Uri.parse('tel:$phoneNumber');
-    try {
-      if (await canLaunchUrl(phoneUrl)) {
-        await launchUrl(phoneUrl);
-      } else {
-        throw 'Não foi possível realizar a chamada para $phoneNumber';
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Não foi possível abrir o discador: $e')),
-        );
-      }
-    }
-  }
-
-  void _openChat() {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Funcionalidade de chat a ser implementada.'),
+          textAlign: TextAlign.center,
         ),
-      );
-    }
+        SizedBox(height: 8),
+        Text(
+          "Por favor, aguarde o recebimento do dinheiro/maquininha ser validado.",
+          style: TextStyle(fontSize: 14, color: Colors.grey),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
   }
 
   Widget _buildWaitingForPickupUI(OrderProvider provider) {
@@ -642,49 +478,14 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
     );
   }
 
-  Widget _buildAwaitingStoreConfirmationUI() {
-    return const Column(
-      key: ValueKey('awaitingStoreUI'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircularProgressIndicator(),
-        SizedBox(height: 16),
-        Text(
-          "Aguardando confirmação da loja...",
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.blueAccent,
-            fontWeight: FontWeight.w500,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        SizedBox(height: 8),
-        Text(
-          "Por favor, aguarde o recebimento do dinheiro/maquininha ser validado.",
-          style: TextStyle(fontSize: 14, color: Colors.grey),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
+  // ------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     final orderProvider = context.watch<OrderProvider>();
     final Order? currentActiveOrder = orderProvider.activeOrder;
 
-    if (kDebugMode) {
-      print(
-        "ActiveRideScreen Build (widget key: ${widget.key}): currentOrder=${currentActiveOrder?.id}, lastKnown=${_lastKnownActiveOrder?.id}, isExiting=$_isExiting",
-      );
-    }
-
     if (_isExiting) {
-      if (kDebugMode) {
-        print(
-          "ActiveRideScreen (widget key: ${widget.key}): _isExiting is true, showing loader and awaiting navigation/dispose.",
-        );
-      }
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey),
@@ -696,60 +497,25 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
       if (!_isExiting) {
         _isExiting = true;
         final Order orderThatJustEnded = _lastKnownActiveOrder!;
-
-        if (kDebugMode) {
-          print(
-            "ActiveRideScreen Build (widget key: ${widget.key}): Transition detected for order ${orderThatJustEnded.id}. _isExiting set to true. Scheduling callback.",
-          );
-        }
-
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           if (mounted) {
-            if (kDebugMode) {
-              print(
-                "ActiveRideScreen PostFrameCallback (widget key: ${widget.key}): Processing ended order ${orderThatJustEnded.id}. Status: ${orderThatJustEnded.status}. Current _isExiting: $_isExiting (should be true)",
-              );
-            }
-
             if (orderThatJustEnded.status == OrderStatus.completed) {
-              if (kDebugMode) {
-                print(
-                  "ActiveRideScreen PostFrameCallback (widget key: ${widget.key}): Showing completion dialog for ID: ${orderThatJustEnded.id}",
-                );
-              }
               await _showRideCompletionDialog(
                 context,
                 orderThatJustEnded,
               );
-              // Não navegue para Home aqui, pois já navega no onPressed do "Ótimo!"
             } else if (orderThatJustEnded.status.name
                     .toLowerCase()
                     .contains('cancel') ||
                 orderThatJustEnded.status ==
                     OrderStatus.cancellationRequested) {
-              if (kDebugMode) {
-                print(
-                  "ActiveRideScreen PostFrameCallback (widget key: ${widget.key}): Order CANCELLED/REQUESTED. Navigating to Home. ID: ${orderThatJustEnded.id}",
-                );
-              }
               if (Navigator.canPop(context)) {
                 Navigator.of(context).popUntil((route) => route.isFirst);
               }
             } else {
-              if (kDebugMode) {
-                print(
-                  "ActiveRideScreen PostFrameCallback (widget key: ${widget.key}): Order ${orderThatJustEnded.id} ended with UNEXPECTED status ${orderThatJustEnded.status}. Navigating Home.",
-                );
-              }
               if (Navigator.canPop(context)) {
                 Navigator.of(context).popUntil((route) => route.isFirst);
               }
-            }
-          } else {
-            if (kDebugMode) {
-              print(
-                "ActiveRideScreen PostFrameCallback (widget key: ${widget.key}): Not mounted when callback executed for order ${orderThatJustEnded.id}. _isExiting was $_isExiting",
-              );
             }
           }
         });
@@ -764,11 +530,6 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
     _lastKnownActiveOrder = currentActiveOrder;
 
     if (currentActiveOrder == null && !_isExiting) {
-      if (kDebugMode) {
-        print(
-          "ActiveRideScreen Build (widget key: ${widget.key}): currentActiveOrder is null and not exiting. Attempting to pop as screen might have been opened erroneously.",
-        );
-      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && Navigator.canPop(context)) {
           Navigator.of(context).pop();
@@ -782,26 +543,99 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
     }
 
     if (currentActiveOrder != null && _isExiting) {
-      if (kDebugMode) {
-        print(
-          "ActiveRideScreen Build (widget key: ${widget.key}): Has active order ${currentActiveOrder.id}, but _isExiting was true (state recovery?). Resetting _isExiting.",
-        );
-      }
       _isExiting = false;
     }
 
     if (currentActiveOrder == null) {
-      if (kDebugMode) {
-        print(
-          "ActiveRideScreen Build (widget key: ${widget.key}): CRITICAL FALLBACK - currentActiveOrder is null when UI is expected. Showing loader.",
-        );
-      }
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.red),
         ),
       );
     }
+
+    // ----------- Mapa markers e polylines -----------
+    Set<gmaps.Marker> mapMarkers = {};
+    Set<gmaps.Polyline> mapPolylines = {};
+
+    // Marcador de coleta (início)
+    if (currentActiveOrder.pickupLatitude != null &&
+        currentActiveOrder.pickupLongitude != null) {
+      mapMarkers.add(
+        gmaps.Marker(
+          markerId: const gmaps.MarkerId('pickup'),
+          position: gmaps.LatLng(
+            currentActiveOrder.pickupLatitude!,
+            currentActiveOrder.pickupLongitude!,
+          ),
+          infoWindow: gmaps.InfoWindow(
+            title: currentActiveOrder.type == OrderType.food
+                ? (currentActiveOrder.storeName ?? "Loja Parceira")
+                : "Remetente",
+            snippet: "Coleta",
+          ),
+          icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(gmaps.BitmapDescriptor.hueGreen),
+        ),
+      );
+    }
+
+    // Marcador de entrega (destino)
+    if (currentActiveOrder.deliveryLatitude != null &&
+        currentActiveOrder.deliveryLongitude != null) {
+      mapMarkers.add(
+        gmaps.Marker(
+          markerId: const gmaps.MarkerId('delivery'),
+          position: gmaps.LatLng(
+            currentActiveOrder.deliveryLatitude!,
+            currentActiveOrder.deliveryLongitude!,
+          ),
+          infoWindow: gmaps.InfoWindow(
+            title: currentActiveOrder.customerName ?? "Cliente",
+            snippet: "Entrega",
+          ),
+          icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(gmaps.BitmapDescriptor.hueRed),
+        ),
+      );
+    }
+
+    // Polyline simples entre coleta e entrega (linha reta)
+    if (currentActiveOrder.pickupLatitude != null &&
+        currentActiveOrder.pickupLongitude != null &&
+        currentActiveOrder.deliveryLatitude != null &&
+        currentActiveOrder.deliveryLongitude != null) {
+      mapPolylines.add(
+        gmaps.Polyline(
+          polylineId: const gmaps.PolylineId('route'),
+          color: Colors.teal,
+          width: 5,
+          points: [
+            gmaps.LatLng(
+              currentActiveOrder.pickupLatitude!,
+              currentActiveOrder.pickupLongitude!,
+            ),
+            gmaps.LatLng(
+              currentActiveOrder.deliveryLatitude!,
+              currentActiveOrder.deliveryLongitude!,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Zoom para inicializar o mapa entre coleta e entrega
+    gmaps.CameraPosition? initialCameraPosition;
+    if (currentActiveOrder.pickupLatitude != null &&
+        currentActiveOrder.pickupLongitude != null) {
+      initialCameraPosition = gmaps.CameraPosition(
+        target: gmaps.LatLng(
+          currentActiveOrder.pickupLatitude!,
+          currentActiveOrder.pickupLongitude!,
+        ),
+        zoom: 14,
+      );
+    }
+
+    // ----------- FIM DO BLOCO DE MAPA -----------
 
     return WillPopScope(
       onWillPop: () async {
@@ -859,20 +693,16 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
         ),
         body: Stack(
           children: [
-            Container(
-              color: Colors.grey.shade200,
-              child: Center(
-                child: Image.asset(
-                  'assets/images/motoka.png',
-                  height: 150,
-                  errorBuilder: (c, e, s) => const Icon(
-                    Icons.map_outlined,
-                    size: 150,
-                    color: Colors.grey,
-                  ),
-                ),
+            // ----------- MAPA EM BACKGROUND -----------
+            Positioned.fill(
+              child: MapDisplay(
+                initialCameraPosition: initialCameraPosition,
+                markers: mapMarkers,
+                polylines: mapPolylines,
+                enableCurrentLocation: true,
               ),
             ),
+            // ----------- FIM MAPA, RESTANTE IGUAL -----------
             DraggableScrollableSheet(
               initialChildSize: _fixedSheetHeight,
               minChildSize: _fixedSheetHeight,

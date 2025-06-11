@@ -1,156 +1,274 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import '../models/vehicle_type_enum.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
   static const routeName = '/profile';
 
   @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final _formKey = GlobalKey<FormState>();
+
+  late TextEditingController _emailController;
+  late TextEditingController _phoneController;
+  late String? _profileImageUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final driver = Provider.of<AuthProvider>(context, listen: false).currentDriver;
+    _emailController = TextEditingController(text: driver?.email ?? '');
+    _phoneController = TextEditingController(text: driver?.phone ?? '');
+    _profileImageUrl = driver?.profileImageUrl;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Dados mocados do perfil
-    const String driverName = "Carlos Silva";
-    const String driverEmail = "carlos.silva@email.com";
-    const String driverPhone = "(31) 99999-8888";
-    const String vehicleModel = "Honda CG 160 Titan";
-    const String licensePlate = "XYZ-1234";
-    const String driverRating = "4.85"; // Exemplo de avaliação
+    final driver = Provider.of<AuthProvider>(context).currentDriver;
+
+    if (driver == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Meu Perfil'),
+          centerTitle: true,
+        ),
+        body: const Center(
+          child: Text('Nenhum entregador autenticado.'),
+        ),
+      );
+    }
+
+    final isMoto = driver.vehicleType == VehicleType.moto;
+    final isBike = driver.vehicleType == VehicleType.bike;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Meu Perfil'),
         centerTitle: true,
-        backgroundColor: Theme.of(context).primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 1,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Center(
-              child: Column(
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              // Foto do Perfil e Botão editar
+              Stack(
+                alignment: Alignment.bottomRight,
                 children: [
-                  Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      CircleAvatar(
-                        radius: 60,
-                        backgroundColor: Colors.grey[200],
-                        child: Icon(Icons.person, size: 60, color: Colors.grey[600]),
+                  CircleAvatar(
+                    radius: 55,
+                    backgroundColor: Colors.grey[200],
+                    backgroundImage: (_profileImageUrl != null && _profileImageUrl!.isNotEmpty)
+                        ? NetworkImage(_profileImageUrl!)
+                        : null,
+                    child: (_profileImageUrl == null || _profileImageUrl!.isEmpty)
+                        ? Icon(Icons.person, size: 60, color: Colors.grey[400])
+                        : null,
+                  ),
+                  Positioned(
+                    bottom: 4,
+                    right: 4,
+                    child: InkWell(
+                      onTap: () {
+                        // Implementar lógica de trocar foto
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Função de alterar foto ainda não implementada')),
+                        );
+                      },
+                      child: CircleAvatar(
+                        backgroundColor: Theme.of(context).colorScheme.secondary,
+                        radius: 18,
+                        child: const Icon(Icons.edit, size: 18, color: Colors.white),
                       ),
-                      Material(
-                        color: Theme.of(context).colorScheme.secondary,
-                        borderRadius: BorderRadius.circular(20),
-                        child: InkWell(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Editar foto do perfil (a implementar).')),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(20),
-                          child: const Padding(
-                            padding: EdgeInsets.all(6.0),
-                            child: Icon(Icons.edit, color: Colors.white, size: 18),
-                          ),
-                        ),
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    driverName,
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.star,
-                          color: Theme.of(context).colorScheme.secondary, size: 20),
-                      const SizedBox(width: 4),
-                      Text(driverRating,
-                          style: const TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 4),
-                      const Text('(Sua Avaliação)',
-                          style: TextStyle(fontSize: 12, color: Colors.grey)),
-                    ],
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
-            _buildProfileInfoCard(context, 'Informações Pessoais', [
-              _buildInfoRow(context, Icons.email_outlined, 'Email', driverEmail),
-              _buildInfoRow(context, Icons.phone_outlined, 'Telefone', driverPhone),
-            ]),
-            const SizedBox(height: 20),
-            _buildProfileInfoCard(context, 'Informações do Veículo', [
-              _buildInfoRow(context, Icons.motorcycle_outlined, 'Modelo', vehicleModel),
-              _buildInfoRow(context, Icons.pin_outlined, 'Placa', licensePlate),
-            ]),
-            const SizedBox(height: 20),
-            _buildProfileInfoCard(context, 'Documentos', [
-              _buildInfoRow(context, Icons.badge_outlined, 'CNH', 'Válida até 20/10/2025', action: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Visualizar/Atualizar CNH (a implementar).')),
-                );
-              }),
-              _buildInfoRow(context, Icons.description_outlined, 'CRLV', 'Atualizado', action: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Visualizar/Atualizar CRLV (a implementar).')),
-                );
-              }),
-            ]),
-            const SizedBox(height: 30),
-            Center(
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.edit_note_outlined),
-                label: const Text('Editar Informações'),
-                onPressed: () {
-                  // Navegar para uma tela de edição de perfil
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Tela de edição de perfil a ser implementada.')),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.secondary,
-                  foregroundColor: Colors.black87,
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                  textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 1,
-                ),
+              const SizedBox(height: 12),
+              // Nome completo
+              Text(
+                driver.name,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
               ),
-            ),
-          ],
+              const SizedBox(height: 6),
+              // Avaliação
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.star, color: Colors.amber[700], size: 21),
+                  const SizedBox(width: 4),
+                  Text(
+                    driver.rating.toStringAsFixed(2),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                  ),
+                  const SizedBox(width: 4),
+                  const Text('(avaliação)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+              const SizedBox(height: 28),
+              // Dados Pessoais
+              _sectionCard(
+                context,
+                title: 'Dados Pessoais',
+                children: [
+                  _profileField(Icons.badge_outlined, 'CPF', driver.cpf ?? '', enabled: false),
+                  _profileField(Icons.calendar_today_outlined, 'Data de Nascimento', driver.birthDate ?? '', enabled: false),
+                  _profileField(Icons.phone_outlined, 'Celular (WhatsApp)', '', // valor nunca null
+                      controller: _phoneController, enabled: true),
+                  _profileField(Icons.email_outlined, 'E-mail', '', // valor nunca null
+                      controller: _emailController, enabled: true),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (isMoto)
+                _sectionCard(
+                  context,
+                  title: 'Documentos Pessoais',
+                  children: [
+                    _imageField(
+                      context,
+                      icon: Icons.badge_outlined,
+                      label: 'Foto da CNH',
+                      imageUrl: driver.cnhImageUrl ?? '',
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Visualização da CNH não implementada.')),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              if (isBike)
+                _sectionCard(
+                  context,
+                  title: 'Documentos Pessoais',
+                  children: [
+                    _imageField(
+                      context,
+                      icon: Icons.image,
+                      label: 'Documento Pessoal (CPF ou RG)',
+                      imageUrl: driver.docImageUrl ?? '',
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Visualização do documento não implementada.')),
+                        );
+                      },
+                    ),
+                    if ((driver.cnhOpcionalImageUrl ?? '').isNotEmpty)
+                      _imageField(
+                        context,
+                        icon: Icons.badge_outlined,
+                        label: 'CNH (opcional)',
+                        imageUrl: driver.cnhOpcionalImageUrl ?? '',
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Visualização da CNH não implementada.')),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              if (isMoto)
+                ...[
+                  const SizedBox(height: 16),
+                  _sectionCard(
+                    context,
+                    title: 'Dados da Moto',
+                    children: [
+                      _imageField(
+                        context,
+                        icon: Icons.motorcycle,
+                        label: 'Foto da Moto',
+                        imageUrl: driver.vehiclePhotoUrl ?? '',
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Visualização da foto da moto não implementada.')),
+                          );
+                        },
+                      ),
+                      _profileField(Icons.motorcycle_outlined, 'Modelo', driver.vehicleModel ?? '', enabled: false),
+                      _profileField(Icons.palette_outlined, 'Cor', driver.vehicleColor ?? '', enabled: false),
+                      _profileField(Icons.pin_outlined, 'Placa', driver.licensePlate ?? '', enabled: false),
+                      _profileField(Icons.confirmation_num_outlined, 'Renavam', driver.renavam ?? '', enabled: false),
+                    ],
+                  ),
+                ],
+              const SizedBox(height: 26),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.save),
+                      label: const Text('Salvar'),
+                      onPressed: () {
+                        if (_formKey.currentState!.validate()) {
+                          // Atualizar telefone/email
+                          // Chame o AuthProvider para salvar as alterações
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Dados salvos com sucesso!')),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.edit_note_outlined),
+                      label: const Text('Solicitar alteração'),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Entre em contato com o suporte para solicitar alteração cadastral.')),
+                        );
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        foregroundColor: Theme.of(context).primaryColor,
+                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                        side: BorderSide(color: Theme.of(context).primaryColor, width: 2),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 30),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildProfileInfoCard(
-      BuildContext context, String title, List<Widget> children) {
+  Widget _sectionCard(BuildContext context, {required String title, required List<Widget> children}) {
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      elevation: 2,
       margin: EdgeInsets.zero,
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
         padding: const EdgeInsets.all(18.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).primaryColor,
-              ),
-            ),
-            const Divider(height: 24, thickness: 1.2),
+            Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).primaryColor)),
+            const Divider(height: 22, thickness: 1.2),
             ...children,
           ],
         ),
@@ -158,41 +276,83 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoRow(BuildContext context, IconData icon, String label, String value,
-      {VoidCallback? action}) {
+  Widget _profileField(IconData icon, String label, String value, {TextEditingController? controller, bool enabled = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: Colors.grey[700], size: 20),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
+            child: controller != null
+                ? TextFormField(
+                    controller: controller,
+                    enabled: enabled,
+                    decoration: InputDecoration(
+                      labelText: label,
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                    validator: (val) {
+                      if (enabled && (val == null || val.isEmpty)) {
+                        return 'Obrigatório';
+                      }
+                      return null;
+                    },
+                  )
+                : InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: label,
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                    child: Text(
+                      value ?? '', // <-- Corrigido para sempre String
+                      style: TextStyle(fontWeight: enabled ? FontWeight.normal : FontWeight.bold, color: enabled ? Colors.black : Colors.black87, fontSize: 15),
+                    ),
+                  ),
           ),
-          if (action != null)
-            IconButton(
-              icon: Icon(Icons.arrow_forward_ios, size: 16, color: Theme.of(context).primaryColor),
-              onPressed: action,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            )
         ],
       ),
     );
   }
-}
 
+  Widget _imageField(BuildContext context, {required IconData icon, required String label, String imageUrl = '', required VoidCallback onPressed}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(icon, color: Colors.grey[700], size: 20),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(label, style: const TextStyle(fontSize: 15)),
+          ),
+          if (imageUrl.isNotEmpty)
+            InkWell(
+              onTap: onPressed,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(5),
+                child: Image.network(
+                  imageUrl,
+                  width: 48,
+                  height: 48,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined, size: 36, color: Colors.grey),
+                ),
+              ),
+            )
+          else
+            const Icon(Icons.image_not_supported_outlined, color: Colors.grey, size: 36),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+}

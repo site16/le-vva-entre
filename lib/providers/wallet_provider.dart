@@ -1,268 +1,190 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:levva_entregador/models/wallet_transaction_model.dart';
-import 'package:levva_entregador/models/order_model.dart';
-import 'package:provider/provider.dart';
-import 'notification_provider.dart';
+import '../models/wallet_transaction_model.dart';
 
 enum WalletFilterType { all, today, yesterday, customRange }
 
-class WalletSnapshot {
-  final DateTime referenceDate;
-  final double cashBalanceSnapshot;
-  final double grossEarningsForCommissionSnapshot;
-
-  WalletSnapshot({
-    required this.referenceDate,
-    required this.cashBalanceSnapshot,
-    required this.grossEarningsForCommissionSnapshot,
-  });
-}
-
-class WalletProvider with ChangeNotifier {
+class WalletProvider extends ChangeNotifier {
   double _onlineBalance = 0.0;
   double _cashBalance = 0.0;
   double _grossEarningsForCommission = 0.0;
-
-  List<WalletTransaction> _transactions = [];
   bool _isLoading = false;
 
   WalletFilterType _currentFilterType = WalletFilterType.all;
   DateTimeRange? _selectedDateRange;
+  List<WalletTransaction> _transactions = [];
   List<WalletTransaction> _filteredTransactions = [];
 
-  final Map<String, WalletSnapshot> _monthlySnapshots = {};
+  // Taxas simuladas
+  final double maintenanceFeePercentage = 0.08;
+  final double transferFeePercentage = 0.03;
 
-  WalletFilterType get currentFilterType => _currentFilterType;
-  DateTimeRange? get selectedDateRange => _selectedDateRange;
-  List<WalletTransaction> get filteredTransactions => List.unmodifiable(_filteredTransactions);
-  Map<String, WalletSnapshot> get monthlySnapshots => Map.unmodifiable(_monthlySnapshots);
+  WalletProvider() {
+    fetchWalletData();
+  }
 
-  final double _maintenanceFeePercentage = 0.10; // 10%
-  final double _transferFeePercentage = 0.015;   // 1.5%
-
+  // Getters
   double get onlineBalance => _onlineBalance;
   double get cashBalance => _cashBalance;
   double get grossEarningsForCommission => _grossEarningsForCommission;
-  List<WalletTransaction> get transactions => List.unmodifiable(_transactions);
+  double get totalCommissionRate => maintenanceFeePercentage + transferFeePercentage;
   bool get isLoading => _isLoading;
+  WalletFilterType get currentFilterType => _currentFilterType;
+  DateTimeRange? get selectedDateRange => _selectedDateRange;
+  List<WalletTransaction> get transactions => List.unmodifiable(_transactions);
+  List<WalletTransaction> get filteredTransactions => List.unmodifiable(_filteredTransactions);
 
-  double get maintenanceFeePercentage => _maintenanceFeePercentage;
-  double get transferFeePercentage => _transferFeePercentage;
-  double get totalCommissionRate => _maintenanceFeePercentage + _transferFeePercentage;
-
-  void ensureMonthlySnapshot() {
-    final now = DateTime.now();
-    final key = "${now.year}-${now.month.toString().padLeft(2, '0')}";
-    if (!_monthlySnapshots.containsKey(key)) {
-      _monthlySnapshots[key] = WalletSnapshot(
-        referenceDate: DateTime(now.year, now.month, 1),
-        cashBalanceSnapshot: _cashBalance,
-        grossEarningsForCommissionSnapshot: _grossEarningsForCommission,
-      );
-      _cashBalance = 0.0;
-      if (_onlineBalance > 0) {
-        _grossEarningsForCommission = _onlineBalance;
-      } else {
-        _grossEarningsForCommission = 0.0;
-      }
-      notifyListeners();
-    }
-  }
-
-  WalletSnapshot? getSnapshotForMonth(int year, int month) {
-    final key = "$year-${month.toString().padLeft(2, '0')}";
-    return _monthlySnapshots[key];
-  }
-
+  /// Busca dados simulados. Troque pela lógica real com Firestore se desejar.
   Future<void> fetchWalletData() async {
     _isLoading = true;
     notifyListeners();
-    await Future.delayed(const Duration(seconds: 1));
-    _isLoading = false;
-    ensureMonthlySnapshot();
-    _applyFilter();
-    notifyListeners();
-  }
 
-  void addTransactionForOrderCompletion(Order completedOrder) {
-    ensureMonthlySnapshot();
+    // Exemplo de dados simulados. Substitua por fetch do Firestore.
+    await Future.delayed(const Duration(milliseconds: 800));
+    _transactions = [
+      WalletTransaction(
+        id: UniqueKey().toString(),
+        amount: 100.0,
+        date: DateTime.now().subtract(const Duration(hours: 1)),
+        description: 'Corrida concluída',
+        type: TransactionType.creditOnlineEarning,
+      ),
+      WalletTransaction(
+        id: UniqueKey().toString(),
+        amount: -50.0,
+        date: DateTime.now().subtract(const Duration(days: 1, hours: 2)),
+        description: 'Saque realizado',
+        type: TransactionType.debitWithdrawalFromOnline,
+      ),
+      WalletTransaction(
+        id: UniqueKey().toString(),
+        amount: 30.0,
+        date: DateTime.now().subtract(const Duration(days: 1, hours: 5)),
+        description: 'Corrida concluída',
+        type: TransactionType.creditOnlineEarning,
+      ),
+      WalletTransaction(
+        id: UniqueKey().toString(),
+        amount: 40.0,
+        date: DateTime.now().subtract(const Duration(days: 2)),
+        description: 'Recebido em dinheiro',
+        type: TransactionType.infoCashEarning,
+      ),
+    ];
 
-    double earnings = completedOrder.estimatedValue;
-    if (earnings <= 0) {
-      return;
-    }
+    // Simulando valores
+    _onlineBalance = _transactions
+        .where((t) => t.type == TransactionType.creditOnlineEarning)
+        .fold(0.0, (sum, t) => sum + t.amount)
+      - _transactions
+          .where((t) => t.type == TransactionType.debitWithdrawalFromOnline)
+          .fold(0.0, (sum, t) => sum + t.amount.abs());
 
-    TransactionType transactionType;
-    String description;
-    String orderIdShort = completedOrder.id.substring(0, completedOrder.id.length < 6 ? completedOrder.id.length : 6);
-    String paymentMethodName = "Desconhecido";
+    _cashBalance = _transactions
+        .where((t) => t.type == TransactionType.infoCashEarning)
+        .fold(0.0, (sum, t) => sum + t.amount);
 
-    switch (completedOrder.paymentMethod) {
-      case PaymentMethod.online:
-      case PaymentMethod.levvaPay:
-        _onlineBalance += earnings;
-        transactionType = TransactionType.creditOnlineEarning;
-        paymentMethodName = "Online";
-        break;
-      case PaymentMethod.cash:
-        _cashBalance += earnings;
-        transactionType = TransactionType.infoCashEarning;
-        paymentMethodName = "Dinheiro";
-        break;
-      case PaymentMethod.cardMachine:
-        _cashBalance += earnings;
-        transactionType = TransactionType.infoCashEarning;
-        paymentMethodName = "Maquininha";
-        break;
-      case PaymentMethod.card:
-        _onlineBalance += earnings;
-        transactionType = TransactionType.creditOnlineEarning;
-        paymentMethodName = "Cartão (Online)";
-        break;
-    }
-    description = 'Ganho $paymentMethodName - Pedido #$orderIdShort';
+    _grossEarningsForCommission = _transactions
+        .where((t) => t.type == TransactionType.creditOnlineEarning)
+        .fold(0.0, (sum, t) => sum + t.amount);
 
-    _grossEarningsForCommission += earnings;
+    _applyFilterInternal(_currentFilterType, customRange: _selectedDateRange);
 
-    final newTransaction = WalletTransaction(
-      id: 'ORDER_${transactionType.name}_${completedOrder.id}_${DateTime.now().millisecondsSinceEpoch}',
-      type: transactionType,
-      description: description,
-      amount: earnings,
-      date: DateTime.now(),
-      orderId: completedOrder.id,
-    );
-
-    _transactions.insert(0, newTransaction);
-    _applyFilter();
-    notifyListeners();
-  }
-
-  Map<String, double> calculateWithdrawalDetails(double requestedAmountFromOnline) {
-    if (requestedAmountFromOnline <= 0) {
-      return {
-        'requestedAmount': 0.0,
-        'platformCommission': 0.0,
-        'netAmountToReceive': 0.0,
-        'totalDebitFromOnline': 0.0
-      };
-    }
-
-    double platformCommission = _grossEarningsForCommission * totalCommissionRate;
-    platformCommission = (platformCommission * 100).roundToDouble() / 100;
-
-    double netAmountToReceive = requestedAmountFromOnline - platformCommission;
-    netAmountToReceive = (netAmountToReceive * 100).roundToDouble() / 100;
-
-    return {
-      'requestedAmount': requestedAmountFromOnline,
-      'platformCommission': platformCommission,
-      'netAmountToReceive': netAmountToReceive,
-      'totalDebitFromOnline': requestedAmountFromOnline,
-    };
-  }
-
-  Future<void> requestWithdrawal(double requestedAmountFromOnline, BuildContext context) async {
-    _isLoading = true;
-    notifyListeners();
-
-    await Future.delayed(const Duration(milliseconds: 1500));
-
-    final details = calculateWithdrawalDetails(requestedAmountFromOnline);
-    final platformCommission = details['platformCommission']!;
-    final netAmountToReceive = details['netAmountToReceive']!;
-    final totalDebitFromOnline = details['totalDebitFromOnline']!;
-
-    if (totalDebitFromOnline <= 0) {
-      _isLoading = false;
-      notifyListeners();
-      throw Exception('O valor do saque deve ser positivo.');
-    }
-    if (totalDebitFromOnline > _onlineBalance) {
-      _isLoading = false;
-      notifyListeners();
-      throw Exception('Saldo LevvaPay (R\$${_onlineBalance.toStringAsFixed(2)}) insuficiente para sacar R\$${totalDebitFromOnline.toStringAsFixed(2)}.');
-    }
-    if (netAmountToReceive <= 0) {
-      _isLoading = false;
-      notifyListeners();
-      throw Exception('Saque de R\$${totalDebitFromOnline.toStringAsFixed(2)} não cobre a comissão da plataforma (R\$${platformCommission.toStringAsFixed(2)}). Líquido seria R\$${netAmountToReceive.toStringAsFixed(2)}.');
-    }
-
-    _onlineBalance -= totalDebitFromOnline;
-    _onlineBalance = (_onlineBalance * 100).roundToDouble() / 100;
-
-    _grossEarningsForCommission = 0.0;
-
-    _transactions.insert(
-        0,
-        WalletTransaction(
-          id: 'WDRW_${DateTime.now().millisecondsSinceEpoch}',
-          type: TransactionType.debitWithdrawalFromOnline,
-          description:
-              'Saque Solicitado. Líquido: R\$${netAmountToReceive.toStringAsFixed(2)} (Comissão Retida: R\$${platformCommission.toStringAsFixed(2)})',
-          amount: -totalDebitFromOnline,
-          date: DateTime.now(),
-        ));
-
-    // Notificação de saque
-    Provider.of<NotificationProvider>(context, listen: false).addWithdrawalNotification(
-      requested: totalDebitFromOnline,
-      net: netAmountToReceive,
-      fees: platformCommission,
-      status: "Pendente",
-    );
-
-    _applyFilter();
     _isLoading = false;
     notifyListeners();
   }
 
   void applyFilter(WalletFilterType filterType, {DateTimeRange? customRange}) {
     _currentFilterType = filterType;
-    if (filterType == WalletFilterType.customRange && customRange != null) {
-      _selectedDateRange = customRange;
-    } else {
-      _selectedDateRange = null;
-    }
-    _applyFilter();
+    _selectedDateRange = (filterType == WalletFilterType.customRange) ? customRange : null;
+    _applyFilterInternal(filterType, customRange: customRange);
     notifyListeners();
   }
 
-  void _applyFilter() {
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
-    final yesterdayStart = todayStart.subtract(const Duration(days: 1));
-    final yesterdayEnd = todayEnd.subtract(const Duration(days: 1));
-
-    switch (_currentFilterType) {
-      case WalletFilterType.all:
-        _filteredTransactions = List.from(_transactions);
-        break;
-      case WalletFilterType.today:
-        _filteredTransactions = _transactions.where((tx) =>
-          !tx.date.isBefore(todayStart) && !tx.date.isAfter(todayEnd)
-        ).toList();
-        break;
-      case WalletFilterType.yesterday:
-        _filteredTransactions = _transactions.where((tx) =>
-          !tx.date.isBefore(yesterdayStart) && !tx.date.isAfter(yesterdayEnd)
-        ).toList();
-        break;
-      case WalletFilterType.customRange:
-        if (_selectedDateRange != null) {
-          final rangeStart = DateTime(_selectedDateRange!.start.year, _selectedDateRange!.start.month, _selectedDateRange!.start.day);
-          final rangeEnd = DateTime(_selectedDateRange!.end.year, _selectedDateRange!.end.month, _selectedDateRange!.end.day, 23, 59, 59, 999);
-          _filteredTransactions = _transactions.where((tx) =>
-            !tx.date.isBefore(rangeStart) && !tx.date.isAfter(rangeEnd)
-          ).toList();
-        } else {
-          _filteredTransactions = List.from(_transactions);
-        }
-        break;
-    }
+  void _applyFilterInternal(WalletFilterType filterType, {DateTimeRange? customRange}) {
+    DateTime now = DateTime.now();
+    _filteredTransactions = switch (filterType) {
+      WalletFilterType.all => List.from(_transactions),
+      WalletFilterType.today => _transactions.where((tx) {
+        return tx.date.year == now.year && tx.date.month == now.month && tx.date.day == now.day;
+      }).toList(),
+      WalletFilterType.yesterday => _transactions.where((tx) {
+        final yesterday = now.subtract(const Duration(days: 1));
+        return tx.date.year == yesterday.year && tx.date.month == yesterday.month && tx.date.day == yesterday.day;
+      }).toList(),
+      WalletFilterType.customRange when customRange != null => _transactions.where((tx) {
+        return tx.date.isAfter(customRange.start.subtract(const Duration(seconds: 1)))
+            && tx.date.isBefore(customRange.end.add(const Duration(days: 1)));
+      }).toList(),
+      _ => List.from(_transactions),
+    };
     _filteredTransactions.sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  /// Calcula taxas e o valor líquido para saque.
+  Map<String, double> calculateWithdrawalDetails(double requestedAmount) {
+    double commission = requestedAmount * totalCommissionRate;
+    double netAmount = requestedAmount - commission;
+    return {
+      'requestedAmount': requestedAmount,
+      'maintenanceFee': requestedAmount * maintenanceFeePercentage,
+      'transferFee': requestedAmount * transferFeePercentage,
+      'totalCommission': commission,
+      'netAmountToReceive': netAmount > 0 ? netAmount : 0.0,
+      'totalDebitFromOnline': requestedAmount, // pode somar taxas se for sua regra
+    };
+  }
+
+  /// Solicita saque (aqui apenas simulado)
+  Future<void> requestWithdrawal(double amount, BuildContext context) async {
+    if (amount <= 0) throw Exception('Valor inválido.');
+    final details = calculateWithdrawalDetails(amount);
+    if ((details['totalDebitFromOnline'] ?? 0) > onlineBalance) {
+      throw Exception('Saldo insuficiente.');
+    }
+    // Simula saque
+    _transactions.insert(
+      0,
+      WalletTransaction(
+        id: UniqueKey().toString(),
+        amount: -amount,
+        date: DateTime.now(),
+        description: 'Saque realizado',
+        type: TransactionType.debitWithdrawalFromOnline,
+      ),
+    );
+    _onlineBalance -= amount;
+    applyFilter(_currentFilterType, customRange: _selectedDateRange);
+    notifyListeners();
+  }
+
+  /// Adiciona uma transação relacionada à conclusão de um pedido.
+  Future<void> addTransactionForOrderCompletion({
+    required String orderId,
+    required double amount,
+    required DateTime date,
+    required bool paidOnline,
+  }) async {
+    final TransactionType txType = paidOnline
+        ? TransactionType.creditOnlineEarning
+        : TransactionType.infoCashEarning;
+
+    final tx = WalletTransaction(
+      id: UniqueKey().toString(),
+      type: txType,
+      description: paidOnline ? 'Recebimento online do pedido' : 'Recebimento em dinheiro do pedido',
+      amount: amount,
+      date: date,
+      orderId: orderId,
+    );
+    _transactions.insert(0, tx);
+    if (paidOnline) {
+      _onlineBalance += amount;
+      _grossEarningsForCommission += amount;
+    } else {
+      _cashBalance += amount;
+      _grossEarningsForCommission += amount;
+    }
+    applyFilter(_currentFilterType, customRange: _selectedDateRange);
+    notifyListeners();
   }
 }

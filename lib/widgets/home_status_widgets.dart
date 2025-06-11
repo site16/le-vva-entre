@@ -1,54 +1,21 @@
-// lib/widgets/home_status_widgets.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/order_model.dart';
 import '../models/vehicle_type_enum.dart';
+import '../widgets/map_display.dart'; // Importa o MapDisplay
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-// OfflineScreenContent permanece o mesmo.
+// Exibe apenas o mapa (no estado offline)
 class OfflineScreenContent extends StatelessWidget {
   const OfflineScreenContent({super.key});
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.power_settings_new_outlined,
-              size: 90,
-              color: Colors.grey.shade400,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              "Você está offline",
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40.0),
-              child: Text(
-                "Fique disponível para receber chamados.",
-                style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40.0),
-              child: Text(
-                "Ajuste seus tipos de serviço no menu.",
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-        ),
+    // Exibe o mapa em vez do layout offline antigo
+    return const MapDisplay(
+      enableCurrentLocation: true,
+      initialCameraPosition: CameraPosition(
+        target: LatLng(-23.5505, -46.6333), // Exemplo: São Paulo
+        zoom: 13,
       ),
     );
   }
@@ -108,7 +75,6 @@ class _NewOrderOfferPanelState extends State<NewOrderOfferPanel> {
   }
 
   String _getOrderTypeName(OrderType type) {
-    /* ... como antes ... */
     switch (type) {
       case OrderType.moto:
         return 'Passageiro';
@@ -120,7 +86,6 @@ class _NewOrderOfferPanelState extends State<NewOrderOfferPanel> {
         return type.name.toUpperCase();
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -137,13 +102,11 @@ class _NewOrderOfferPanelState extends State<NewOrderOfferPanel> {
       locationHint = "${locationHint.substring(0, 22)}...";
     orderTitle += " - $locationHint";
 
-    // --- LÓGICA DE LAYOUT REVISADA ---
     double screenWidth = MediaQuery.of(context).size.width;
     double dragButtonSize = 60.0;
     double trackHeight = 70.0;
     double trackHorizontalMargin = 16.0;
 
-    // O máximo que o botão pode ser arrastado do centro
     double maxDrag =
         (screenWidth / 2) -
         trackHorizontalMargin -
@@ -303,7 +266,6 @@ class _NewOrderOfferPanelState extends State<NewOrderOfferPanel> {
                 ),
                 // Botão deslizante central
                 Transform.translate(
-                  // Usar Transform.translate para mover o botão visualmente
                   offset: Offset(_dragPosition, 0),
                   child: GestureDetector(
                     onHorizontalDragUpdate: (details) {
@@ -316,7 +278,6 @@ class _NewOrderOfferPanelState extends State<NewOrderOfferPanel> {
                           -1.0,
                           1.0,
                         );
-                        // print("Drag: $_dragPosition"); // Para depuração
                       });
                     },
                     onHorizontalDragEnd: (details) {
@@ -328,7 +289,6 @@ class _NewOrderOfferPanelState extends State<NewOrderOfferPanel> {
                         _handleAction(false);
                         setState(() => _dragPosition = -maxDrag);
                       } else {
-                        // Anima de volta para o centro
                         setState(() => _dragPosition = 0.0);
                       }
                     },
@@ -362,7 +322,6 @@ class _NewOrderOfferPanelState extends State<NewOrderOfferPanel> {
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          // Timer Circular
                           if (!_isConfirmingAction)
                             SizedBox(
                               width: dragButtonSize,
@@ -381,9 +340,7 @@ class _NewOrderOfferPanelState extends State<NewOrderOfferPanel> {
                                     .withOpacity(0.5),
                               ),
                             ),
-                          // Ícone/Imagem Central
                           Container(
-                            // Container interno para o ícone, com um padding para o timer não colar
                             padding: const EdgeInsets.all(4.0),
                             child:
                                 _isConfirmingAction

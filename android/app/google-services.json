@@ -1,0 +1,99 @@
+{
+  "project_info": {
+    "project_number": "672403775075",
+    "firebase_url": "https://levva-app-default-rtdb.firebaseio.com",
+    "project_id": "levva-app",
+    "storage_bucket": "levva-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:672403775075:android:f6f0af5c5476b12444e256",
+        "android_client_info": {
+          "package_name": "com.example.levva_app_new"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "672403775075-6cvmvcep3upnm1hm48ds7bg8fld2qs2p.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.levva_app_new",
+            "certificate_hash": "a9f166c0ba56607aae5290f00f64c29000bd1b30"
+          }
+        },
+        {
+          "client_id": "672403775075-897jig3om091oikudp28igbr8oolrj8q.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDZMb65cALUACn4gEr4Zhrlmu10LuEr1fY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "672403775075-897jig3om091oikudp28igbr8oolrj8q.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "672403775075-3l6ue5em712ihnovcqum3podgqknj7fi.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.levvaEntregador"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:672403775075:android:e024f8ababe12ff844e256",
+        "android_client_info": {
+          "package_name": "com.example.levva_entregador"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "672403775075-cirvh7aeeo4h3ldij7kqokb67ph7un32.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.levva_entregador",
+            "certificate_hash": "a9f166c0ba56607aae5290f00f64c29000bd1b30"
+          }
+        },
+        {
+          "client_id": "672403775075-897jig3om091oikudp28igbr8oolrj8q.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDZMb65cALUACn4gEr4Zhrlmu10LuEr1fY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "672403775075-897jig3om091oikudp28igbr8oolrj8q.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "672403775075-3l6ue5em712ihnovcqum3podgqknj7fi.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.levvaEntregador"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

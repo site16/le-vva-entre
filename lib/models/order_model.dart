@@ -1,13 +1,9 @@
-import 'package:flutter/foundation.dart'; // Para kDebugMode, se usar nos fromJson
-import 'package:levva_entregador/models/vehicle_type_enum.dart';
+import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'vehicle_type_enum.dart';
 
-/// Enum para os métodos de pagamento.
 enum PaymentMethod { online, cash, cardMachine, levvaPay, card }
-
-/// Enum para os tipos de pedido.
 enum OrderType { moto, package, food, unknown }
-
-/// Enum para todos os status possíveis de um pedido.
 enum OrderStatus {
   pendingAcceptance,
   toPickup,
@@ -22,7 +18,10 @@ enum OrderStatus {
   cancelledByDriver,
   cancelledBySystem,
   cancellationRequested,
-  unknown, started, accepted, delivered
+  unknown,
+  started,
+  accepted,
+  delivered,
 }
 
 class Order {
@@ -42,9 +41,16 @@ class Order {
   final PaymentMethod paymentMethod;
   final String? recipientPhoneNumber;
   DateTime? waitingSince;
-
-  // Adicionado campo notes:
   final String? notes;
+
+  // Adicione o campo driverId
+  final String? driverId;
+
+  // LOCALIZAÇÃO REAL
+  final double? pickupLatitude;
+  final double? pickupLongitude;
+  final double? deliveryLatitude;
+  final double? deliveryLongitude;
 
   Order({
     required this.id,
@@ -63,7 +69,12 @@ class Order {
     this.paymentMethod = PaymentMethod.online,
     this.recipientPhoneNumber,
     this.waitingSince,
-    this.notes, // Adicionado no construtor
+    this.notes,
+    this.driverId, // novo campo
+    this.pickupLatitude,
+    this.pickupLongitude,
+    this.deliveryLatitude,
+    this.deliveryLongitude,
   });
 
   String? get confirmationCode {
@@ -89,8 +100,7 @@ class Order {
     return DateTime.now().add(Duration(minutes: estimatedMinutes));
   }
 
-  // --- INÍCIO DA SERIALIZAÇÃO E DESSERIALIZAÇÃO ---
-  Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toMap() => {
         'id': id,
         'type': type.name,
         'pickupAddress': pickupAddress,
@@ -99,19 +109,75 @@ class Order {
         'distanceToPickup': distanceToPickup,
         'routeDistance': routeDistance,
         'status': status.name,
-        'creationTime': creationTime.toIso8601String(),
+        'creationTime': creationTime,
         'customerName': customerName,
         'storeName': storeName,
         'items': items,
         'suitableVehicleTypes': suitableVehicleTypes.map((v) => v.name).toList(),
         'paymentMethod': paymentMethod.name,
         'recipientPhoneNumber': recipientPhoneNumber,
-        'waitingSince': waitingSince?.toIso8601String(),
-        'notes': notes, // Incluído na serialização
+        'waitingSince': waitingSince,
+        'notes': notes,
+        'driverId': driverId, // novo campo
+        'pickupLatitude': pickupLatitude,
+        'pickupLongitude': pickupLongitude,
+        'deliveryLatitude': deliveryLatitude,
+        'deliveryLongitude': deliveryLongitude,
       };
 
+  factory Order.fromDocument(DocumentSnapshot doc) {
+    final json = doc.data() as Map<String, dynamic>;
+    T enumFromString<T>(List<T> enumValues, String value, T defaultValue) {
+      try {
+        return enumValues.firstWhere((e) => (e as Enum).name == value);
+      } catch (e) {
+        if (kDebugMode) {
+          print('Valor de enum desconhecido "$value" para $T. Usando default: $defaultValue.');
+        }
+        return defaultValue;
+      }
+    }
+
+    return Order(
+      id: doc.id,
+      type: enumFromString(OrderType.values, json['type'] as String? ?? OrderType.unknown.name, OrderType.unknown),
+      pickupAddress: json['pickupAddress'] as String? ?? '',
+      deliveryAddress: json['deliveryAddress'] as String? ?? '',
+      estimatedValue: (json['estimatedValue'] as num?)?.toDouble() ?? 0.0,
+      distanceToPickup: (json['distanceToPickup'] as num?)?.toDouble() ?? 0.0,
+      routeDistance: (json['routeDistance'] as num?)?.toDouble() ?? 0.0,
+      status: enumFromString(OrderStatus.values, json['status'] as String? ?? OrderStatus.unknown.name, OrderStatus.unknown),
+      creationTime: (json['creationTime'] is Timestamp)
+          ? (json['creationTime'] as Timestamp).toDate()
+          : (json['creationTime'] is String)
+              ? DateTime.parse(json['creationTime'])
+              : DateTime.now(),
+      customerName: json['customerName'] as String?,
+      storeName: json['storeName'] as String?,
+      items: (json['items'] as List<dynamic>?)?.map((item) => item as String).toList(),
+      suitableVehicleTypes: (json['suitableVehicleTypes'] as List<dynamic>?)
+              ?.map((v) => enumFromString(VehicleType.values, v as String? ?? VehicleType.unknown.name, VehicleType.unknown))
+              .where((v) => v != VehicleType.unknown)
+              .toList() ??
+          const [VehicleType.moto, VehicleType.bike],
+      paymentMethod: enumFromString(PaymentMethod.values, json['paymentMethod'] as String? ?? PaymentMethod.online.name, PaymentMethod.online),
+      recipientPhoneNumber: json['recipientPhoneNumber'] as String?,
+      waitingSince: (json['waitingSince'] is Timestamp)
+          ? (json['waitingSince'] as Timestamp).toDate()
+          : (json['waitingSince'] is String)
+              ? DateTime.tryParse(json['waitingSince'])
+              : null,
+      notes: json['notes'] as String?,
+      driverId: json['driverId'] as String?, // novo campo
+      pickupLatitude: (json['pickupLatitude'] as num?)?.toDouble(),
+      pickupLongitude: (json['pickupLongitude'] as num?)?.toDouble(),
+      deliveryLatitude: (json['deliveryLatitude'] as num?)?.toDouble(),
+      deliveryLongitude: (json['deliveryLongitude'] as num?)?.toDouble(),
+    );
+  }
+
   factory Order.fromJson(Map<String, dynamic> json) {
-    T _enumFromString<T>(List<T> enumValues, String value, T defaultValue) {
+    T enumFromString<T>(List<T> enumValues, String value, T defaultValue) {
       try {
         return enumValues.firstWhere((e) => (e as Enum).name == value);
       } catch (e) {
@@ -124,26 +190,33 @@ class Order {
 
     return Order(
       id: json['id'] as String,
-      type: _enumFromString(OrderType.values, json['type'] as String? ?? OrderType.unknown.name, OrderType.unknown),
+      type: enumFromString(OrderType.values, json['type'] as String? ?? OrderType.unknown.name, OrderType.unknown),
       pickupAddress: json['pickupAddress'] as String? ?? '',
       deliveryAddress: json['deliveryAddress'] as String? ?? '',
       estimatedValue: (json['estimatedValue'] as num?)?.toDouble() ?? 0.0,
       distanceToPickup: (json['distanceToPickup'] as num?)?.toDouble() ?? 0.0,
       routeDistance: (json['routeDistance'] as num?)?.toDouble() ?? 0.0,
-      status: _enumFromString(OrderStatus.values, json['status'] as String? ?? OrderStatus.unknown.name, OrderStatus.unknown),
+      status: enumFromString(OrderStatus.values, json['status'] as String? ?? OrderStatus.unknown.name, OrderStatus.unknown),
       creationTime: json['creationTime'] != null ? DateTime.parse(json['creationTime'] as String) : DateTime.now(),
       customerName: json['customerName'] as String?,
       storeName: json['storeName'] as String?,
       items: (json['items'] as List<dynamic>?)?.map((item) => item as String).toList(),
       suitableVehicleTypes: (json['suitableVehicleTypes'] as List<dynamic>?)
-          ?.map((v) => _enumFromString(VehicleType.values, v as String? ?? VehicleType.unknown.name, VehicleType.unknown))
-          .where((v) => v != VehicleType.unknown)
-          .toList() ?? const [VehicleType.moto, VehicleType.bike],
-      paymentMethod: _enumFromString(PaymentMethod.values, json['paymentMethod'] as String? ?? PaymentMethod.online.name, PaymentMethod.online),
+              ?.map((v) => enumFromString(VehicleType.values, v as String? ?? VehicleType.unknown.name, VehicleType.unknown))
+              .where((v) => v != VehicleType.unknown)
+              .toList() ??
+          const [VehicleType.moto, VehicleType.bike],
+      paymentMethod: enumFromString(PaymentMethod.values, json['paymentMethod'] as String? ?? PaymentMethod.online.name, PaymentMethod.online),
       recipientPhoneNumber: json['recipientPhoneNumber'] as String?,
       waitingSince: json['waitingSince'] != null ? DateTime.parse(json['waitingSince'] as String) : null,
-      notes: json['notes'] as String?, // Incluído na desserialização
+      notes: json['notes'] as String?,
+      driverId: json['driverId'] as String?, // novo campo
+      pickupLatitude: (json['pickupLatitude'] as num?)?.toDouble(),
+      pickupLongitude: (json['pickupLongitude'] as num?)?.toDouble(),
+      deliveryLatitude: (json['deliveryLatitude'] as num?)?.toDouble(),
+      deliveryLongitude: (json['deliveryLongitude'] as num?)?.toDouble(),
     );
   }
-  // --- FIM DA SERIALIZAÇÃO E DESSERIALIZAÇÃO ---
+
+  // ... resto igual ...
 }

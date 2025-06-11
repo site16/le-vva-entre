@@ -15,6 +15,9 @@ import '../widgets/app_drawer.dart';
 import '../widgets/home_status_widgets.dart';
 import '../widgets/home_action_bar.dart';
 import '../widgets/new_order_banner.dart';
+import '../widgets/map_display.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 import 'notification_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -53,7 +56,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      Provider.of<WalletProvider>(context, listen: false).fetchWalletData();
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final userId = auth.currentDriver?.id;
+      if (userId != null && userId.isNotEmpty) {
+        final walletProvider = Provider.of<WalletProvider>(context, listen: false);
+        walletProvider.fetchWalletData();
+      }
     });
   }
 
@@ -61,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void dispose() {
     _pulsatingController.dispose();
     _bannerTimer?.cancel();
-    _audioPlayer.dispose(); // Libera o player
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -119,7 +127,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (offeredOrder != null && offeredOrder != _lastOfferedOrder) {
       _showNewOrderBanner(offeredOrder);
 
-      // Adiciona notificação de novo pedido
       Provider.of<NotificationProvider>(context, listen: false).addSystemNotification(
         title: 'Novo pedido recebido!',
         body: 'Você tem um novo pedido para aceitar.',
@@ -138,29 +145,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     Color statusDisplayColor;
     Color statusBorderColor;
     Color statusBackgroundColor;
-    IconData statusIconData;
 
     if (isOnRoute) {
       statusText = "Em Rota";
       statusDisplayColor = Theme.of(context).colorScheme.secondary;
       statusBorderColor = Theme.of(context).colorScheme.secondary.withOpacity(0.7);
       statusBackgroundColor = Theme.of(context).colorScheme.secondary.withOpacity(0.1);
-      statusIconData = Icons.route_rounded;
     } else if (isOnline) {
-      statusText = "Tô on, procurando chamados...";
-      statusDisplayColor = const Color(0xFF388E3C);
-      statusBorderColor = Colors.green.shade600;
-      statusBackgroundColor = const Color(0xFF4CAF50).withOpacity(0.1);
-      statusIconData = Icons.wifi_tethering_rounded;
+      statusText = "Disponível";
+      statusDisplayColor = const Color(0xFFFFFFFF);
+      statusBorderColor = const Color(0xFF43A047);
+      statusBackgroundColor = const Color(0xFF43A047);
     } else {
-      statusText = "Tô off";
+      statusText = "Indisponível";
       statusDisplayColor = Colors.grey.shade700;
       statusBorderColor = Colors.grey.shade400;
       statusBackgroundColor = Colors.grey.shade200;
-      statusIconData = Icons.portable_wifi_off_rounded;
     }
 
-    // Notificações badge
     final unreadCount = Provider.of<NotificationProvider>(context).unreadCount;
 
     return Container(
@@ -170,11 +172,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         right: 16,
         bottom: 8,
       ),
-      color: Colors.white,
+      color: Colors.transparent,
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.menu_rounded, color: Colors.black, size: 28),
+            icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 28),
             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
           Expanded(
@@ -186,9 +188,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   margin: const EdgeInsets.symmetric(horizontal: 8.0),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                      color: statusBackgroundColor,
-                      borderRadius: BorderRadius.circular(25),
-                      border: Border.all(color: statusBorderColor, width: 1.5)),
+                    color: statusBackgroundColor,
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(color: statusBorderColor, width: 1.5)),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -196,12 +198,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
                         transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: ScaleTransition(scale: animation, child: child)),
-                        child: Icon(
-                          statusIconData,
-                          key: ValueKey<String>(statusText),
-                          color: statusDisplayColor,
-                          size: 18,
-                        ),
+                        child: isOnline && !isOnRoute
+                            ? AnimatedBuilder(
+                                animation: _pulsatingController,
+                                builder: (context, child) => Transform.scale(
+                                  scale: _pulsatingAnimation.value,
+                                  child: ColorFiltered(
+                                    colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                                    child: Image.asset(
+                                      'assets/images/levva_icon_transp.png',
+                                      width: 24,
+                                      height: 24,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : isOnRoute
+                                ? Icon(
+                                    Icons.route_rounded,
+                                    key: ValueKey<String>(statusText),
+                                    color: statusDisplayColor,
+                                    size: 18,
+                                  )
+                                : Image.asset(
+                                    'assets/images/levva_icon_transp.png',
+                                    key: ValueKey<String>(statusText),
+                                    width: 24,
+                                    height: 24,
+                                    color: Colors.grey.shade700,
+                                  ),
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -220,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           IconButton(
             icon: Stack(
               children: [
-                const Icon(Icons.notifications_none_outlined, color: Colors.black, size: 28),
+                const Icon(Icons.notifications_none_outlined, color: Colors.white, size: 28),
                 if (unreadCount > 0)
                   Positioned(
                     right: 0, top: 2,
@@ -229,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       decoration: BoxDecoration(
                         color: const Color(0xFF009688),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5),
+                        border: Border.all(color: Colors.transparent, width: 1.5),
                       ),
                     ),
                   ),
@@ -247,17 +272,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildMainContentArea(BuildContext context, OrderProvider orderProvider) {
-    return Container(
-      color: Colors.white,
-      child: Center(
-        child: (orderProvider.isOnline && orderProvider.currentOfferedOrder == null && orderProvider.activeOrder == null)
-            ? Opacity(
-                opacity: 0.1,
-                child: Icon(Icons.explore_outlined, color: Colors.grey[300], size: 120),
-              )
-            : null,
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   Widget _buildLoadingOrOrderSection(BuildContext context, OrderProvider orderProvider, AuthProvider authProvider) {
@@ -272,49 +287,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         currentTimeToAccept: orderProvider.timeToAcceptOrder,
         driverVehicleType: authProvider.currentDriver?.vehicleType,
         onAccept: () async {
-          _stopNotificationSound(); // Para o som ao aceitar
+          _stopNotificationSound();
           await orderProvider.acceptOfferedOrder();
         },
         onReject: () async {
-          _stopNotificationSound(); // Para o som ao recusar
+          _stopNotificationSound();
           await orderProvider.rejectOfferedOrder();
         },
-      );
-    } else if (orderProvider.activeOrder == null && !orderProvider.isInitializing) {
-      return Container(
-        height: 120,
-        padding: const EdgeInsets.all(16.0),
-        alignment: Alignment.center,
-        color: Colors.white.withOpacity(0.95),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ScaleTransition(
-              scale: _pulsatingAnimation,
-              child: Image.asset(
-                'assets/images/levva_icon_transp.png',
-                width: 35,
-                height: 35,
-                color: const Color(0xFF009688),
-                colorBlendMode: BlendMode.srcIn,
-                errorBuilder: (context, error, stackTrace) => Icon(
-                  Icons.sync_outlined,
-                  size: 35,
-                  color: Theme.of(context).primaryColor.withOpacity(0.7),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Text(
-              "Procurando chamados...",
-              style: TextStyle(
-                fontSize: 16,
-                color: const Color(0xFF009688),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
       );
     }
     return const SizedBox.shrink();
@@ -388,13 +367,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
+          const Positioned.fill(
+            child: MapDisplay(
+              enableCurrentLocation: true,
+              initialCameraPosition: CameraPosition(
+                target: LatLng(-23.5505, -46.6333),
+                zoom: 13,
+              ),
+            ),
+          ),
           Column(
             children: [
               _buildTopStatusBar(context, authProvider, orderProvider),
               Expanded(
-                child: !orderProvider.isOnline
-                    ? const OfflineScreenContent()
-                    : _buildMainContentArea(context, orderProvider),
+                child: orderProvider.isOnline
+                    ? _buildMainContentArea(context, orderProvider)
+                    : const SizedBox.shrink(),
               ),
             ],
           ),

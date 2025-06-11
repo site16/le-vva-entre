@@ -1,14 +1,15 @@
+// lib/providers/history_provider.dart
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/ride_history_entry.dart';
-import './order_provider.dart';
-import '../models/order_model.dart';
 
 enum HistoryFilterType { all, today, yesterday, customRange }
 
 class HistoryProvider with ChangeNotifier {
-  OrderProvider _orderProvider;
+  // ### CORREÇÃO: userId agora pode ser nulo ###
+  final String? userId;
 
   List<RideHistoryEntry> _allHistoryEntries = [];
   List<RideHistoryEntry> _filteredHistoryEntries = [];
@@ -16,68 +17,47 @@ class HistoryProvider with ChangeNotifier {
   DateTimeRange? _selectedDateRange;
   HistoryFilterType _currentFilterType = HistoryFilterType.all;
 
-  HistoryProvider(this._orderProvider) {
-    _orderProvider.addListener(_updateHistoryFromOrders);
-    _updateHistoryFromOrders();
+  // ### CORREÇÃO: O construtor usa parâmetro nomeado e aceita um userId nulo ###
+  HistoryProvider({this.userId}) {
+    // Só busca o histórico se o ID do usuário for válido
+    if (userId != null && userId!.isNotEmpty) {
+      fetchHistoryFromFirebase();
+    }
   }
 
   List<RideHistoryEntry> get filteredHistoryEntries => _filteredHistoryEntries;
   DateTimeRange? get selectedDateRange => _selectedDateRange;
   HistoryFilterType get currentFilterType => _currentFilterType;
 
-  void updateOrderProvider(OrderProvider newOrderProvider) {
-    if (_orderProvider != newOrderProvider) {
-      _orderProvider.removeListener(_updateHistoryFromOrders);
-      _orderProvider = newOrderProvider;
-      _orderProvider.addListener(_updateHistoryFromOrders);
-      _updateHistoryFromOrders();
+  /// Carrega histórico do Firestore
+  Future<void> fetchHistoryFromFirebase() async {
+    // Impede a execução se não houver ID de usuário
+    if (userId == null || userId!.isEmpty) {
+      _allHistoryEntries = [];
+      _filteredHistoryEntries = [];
+      notifyListeners();
+      return;
+    }
+    try {
+      _allHistoryEntries = await RideHistoryEntry.fetchHistory(userId!); // Usa o userId da classe
+      _applyFilterLogic(_currentFilterType, customRange: _selectedDateRange);
+      _sortEntries();
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) print("Erro ao buscar histórico: $e");
     }
   }
 
-  void _updateHistoryFromOrders() {
-    _allHistoryEntries = _orderProvider.orderHistory.map((order) {
-      return RideHistoryEntry(
-        id: order.id,
-        type: order.type,
-        dateTime: order.creationTime,
-        origin: order.pickupAddress,
-        destination: order.deliveryAddress,
-        value: order.estimatedValue,
-        status: order.status,
-        paymentMethod: order.paymentMethod, // <-- campo adicionado!
-        notes: order.notes,
-        code: "#${order.id}",
-        userName: order.customerName ?? "@usuário",
-        timeStart: DateFormat('HH:mm').format(order.creationTime),
-        timeAccepted: DateFormat('HH:mm').format(order.creationTime.add(const Duration(minutes: 7))),
-        timeDelivered: DateFormat('HH:mm').format(order.creationTime.add(const Duration(minutes: 18))),
-      );
-    }).toList();
-
-    _applyFilterLogic(_currentFilterType, customRange: _selectedDateRange);
-    _sortEntries();
-    notifyListeners();
+  // ... (o resto do seu arquivo pode permanecer o mesmo)
+  
+  /// Atualização manual (caso precise recarregar)
+  Future<void> refresh() async {
+    await fetchHistoryFromFirebase();
   }
 
   // ORDENA os pedidos mais recentes EM CIMA (ordem de chegada)
   void _sortEntries() {
     _filteredHistoryEntries.sort((a, b) => b.dateTime.compareTo(a.dateTime));
-    // Se quiser ativos em cima e finalizados/cancelados embaixo, use isso:
-    /*
-    _filteredHistoryEntries.sort((a, b) {
-      int statusPriority(A) {
-        // Defina status considerados ATIVOS:
-        if (A.status == OrderStatus.completed ||
-            A.status == OrderStatus.cancelledByCustomer ||
-            A.status == OrderStatus.cancelledByDriver ||
-            A.status == OrderStatus.cancelledBySystem) return 1;
-        return 0;
-      }
-      int cmp = statusPriority(a).compareTo(statusPriority(b));
-      if (cmp != 0) return cmp;
-      return b.dateTime.compareTo(a.dateTime);
-    });
-    */
   }
 
   Map<String, List<RideHistoryEntry>> get groupedEntries {
@@ -164,11 +144,5 @@ class HistoryProvider with ChangeNotifier {
     _applyFilterLogic(filterType, customRange: _selectedDateRange);
     _sortEntries();
     notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _orderProvider.removeListener(_updateHistoryFromOrders);
-    super.dispose();
   }
 }

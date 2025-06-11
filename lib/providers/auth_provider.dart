@@ -1,7 +1,8 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:levva_entregador/models/order_model.dart';
 import '../models/driver_model.dart';
-import '../models/order_model.dart'; // Para OrderType e PaymentMethod
-import '../models/vehicle_type_enum.dart'; // Para VehicleType
 
 class AuthProvider with ChangeNotifier {
   Driver? _currentDriver;
@@ -11,86 +12,67 @@ class AuthProvider with ChangeNotifier {
   bool get isAuthenticated => _currentDriver != null;
   bool get isLoading => _isLoading;
 
-  Future<bool> login(String cpf, String password) async {
+  /// Login com e-mail e senha via Firebase Auth.
+  /// Após login, busca o perfil do motorista no Firestore pelo uid.
+  Future<bool> login(String email, String password) async {
     _isLoading = true;
     notifyListeners();
-    await Future.delayed(const Duration(seconds: 1));
 
-    String cleanCpf = cpf.replaceAll(RegExp(r'[^0-9]'), '');
+    try {
+      // 1. Autentica no Firebase Auth
+      final credential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
+      final uid = credential.user!.uid;
 
-    // Simulação de login. Em um app real, você buscaria os dados do Driver do backend
-    // e usaria Driver.fromMap(apiData, driverId) para criar o objeto _currentDriver.
-    // A lógica de `Driver.fromMap` já trata a inicialização de preferredPaymentMethods.
+      // 2. Busca perfil do motorista no Firestore
+      final doc = await FirebaseFirestore.instance
+          .collection('drivers')
+          .doc(uid)
+          .get();
+      if (!doc.exists) throw Exception("Usuário não encontrado no sistema.");
 
-    if (cleanCpf == "11111111111" && password == "12345678") {
-      _currentDriver = Driver(
-        id: 'driverMoto001',
-        name: 'Carlos Entregador (Moto)',
-        email: 'moto@example.com',
-        phone: '(31) 98765-4321',
-        vehicleType: VehicleType.moto,
-        vehicleModel: 'Honda CG 160',
-        licensePlate: 'LEV-0101',
-        rating: 4.8,
-        profileImageUrl: 'https://via.placeholder.com/150/0000FF/FFFFFF?Text=CM',
-        preferredServiceTypes: [OrderType.food, OrderType.package, OrderType.moto],
-        // preferredPaymentMethods será inicializado com o padrão do construtor de Driver
-        // que é [PaymentMethod.online, PaymentMethod.cash, PaymentMethod.cardMachine]
-      );
+      _currentDriver = Driver.fromDocument(doc);
       _isLoading = false;
       notifyListeners();
       return true;
-    } else if (cleanCpf == "22222222222" && password == "12345678") {
-      _currentDriver = Driver(
-        id: 'driverBike002',
-        name: 'Ana Entregadora (Bike)',
-        email: 'bike@example.com',
-        phone: '(31) 91234-5678',
-        vehicleType: VehicleType.bike,
-        vehicleModel: 'Caloi Explorer',
-        licensePlate: 'BIK-0202',
-        rating: 4.9,
-        profileImageUrl: 'https://via.placeholder.com/150/00FF00/FFFFFF?Text=AB',
-        preferredServiceTypes: [OrderType.food, OrderType.package],
-        // preferredPaymentMethods será inicializado com o padrão do construtor de Driver
-      );
+    } catch (e) {
       _isLoading = false;
       notifyListeners();
-      return true;
-    } else {
-      _isLoading = false;
-      notifyListeners();
-      throw Exception("CPF ou senha inválidos.");
+      rethrow;
     }
   }
 
+  /// Logout do usuário atual
   Future<void> logout() async {
+    await FirebaseAuth.instance.signOut();
     _currentDriver = null;
     notifyListeners();
   }
 
+  /// Atualiza preferências de serviço (e salva no Firestore)
   Future<void> updateServicePreferences(List<OrderType> newPreferences) async {
     if (_currentDriver == null) return;
+
     _currentDriver!.preferredServiceTypes = newPreferences;
     notifyListeners();
-    if (kDebugMode) {
-      print("AuthProvider: Preferências de serviço atualizadas para: $newPreferences");
-    }
-    // Em um app real, você salvaria isso no backend.
+
+    await FirebaseFirestore.instance
+        .collection('drivers')
+        .doc(_currentDriver!.id)
+        .update({'preferredServiceTypes': newPreferences.map((e) => e.name).toList()});
   }
 
+  /// Atualiza preferências de pagamento (e salva no Firestore)
   Future<void> updatePaymentPreferences(List<PaymentMethod> newPreferences) async {
     if (_currentDriver == null) return;
 
-    // Verifica se só "Delivery de Comida" está ativo
-    bool onlyDeliveryActive = _currentDriver!.preferredServiceTypes.length == 1 &&
+    // Exemplo de lógica para garantir LevvaPay ativo
+    final onlyDeliveryActive = _currentDriver!.preferredServiceTypes.length == 1 &&
         _currentDriver!.preferredServiceTypes.contains(OrderType.food);
 
     if (onlyDeliveryActive) {
-      // Força LevvaPay como única forma de pagamento para Delivery
       _currentDriver!.preferredPaymentMethods = [PaymentMethod.online];
     } else {
-      // Garante que LevvaPay sempre está incluso
       if (!newPreferences.contains(PaymentMethod.online)) {
         newPreferences.insert(0, PaymentMethod.online);
       }
@@ -98,34 +80,71 @@ class AuthProvider with ChangeNotifier {
     }
 
     notifyListeners();
-    if (kDebugMode) {
-      print("AuthProvider: Preferências de pagamento atualizadas para: ${_currentDriver!.preferredPaymentMethods}");
-    }
-    // Em um app real, você salvaria isso no backend.
+
+    await FirebaseFirestore.instance
+        .collection('drivers')
+        .doc(_currentDriver!.id)
+        .update({
+          'preferredPaymentMethods':
+              _currentDriver!.preferredPaymentMethods.map((e) => e.name).toList(),
+        });
   }
 
+  /// Atualiza campos do perfil do motorista e salva no Firestore
   Future<void> updateDriverProfile(Map<String, dynamic> newData) async {
     if (_currentDriver == null) return;
     _isLoading = true;
     notifyListeners();
-    await Future.delayed(const Duration(seconds: 1)); 
 
-    // Em um app real, você enviaria newData para o backend e receberia o Driver atualizado.
-    // Por enquanto, estamos recriando o objeto Driver localmente.
-    _currentDriver = Driver(
-      id: _currentDriver!.id,
-      name: newData['name'] ?? _currentDriver!.name,
-      email: _currentDriver!.email, 
-      phone: newData['phone'] ?? _currentDriver!.phone,
-      vehicleType: _currentDriver!.vehicleType, 
-      vehicleModel: newData['vehicleModel'] ?? _currentDriver!.vehicleModel,
-      licensePlate: newData['licensePlate'] ?? _currentDriver!.licensePlate,
-      profileImageUrl: newData['profileImageUrl'] ?? _currentDriver!.profileImageUrl,
-      rating: _currentDriver!.rating, 
-      preferredServiceTypes: _currentDriver!.preferredServiceTypes, 
-      preferredPaymentMethods: _currentDriver!.preferredPaymentMethods, // Mantém as preferências atuais
-    );
-    _isLoading = false;
-    notifyListeners();
+    try {
+      // Atualiza localmente
+      _currentDriver = Driver(
+        id: _currentDriver!.id,
+        name: newData['name'] ?? _currentDriver!.name,
+        email: newData['email'] ?? _currentDriver!.email,
+        phone: newData['phone'] ?? _currentDriver!.phone,
+        vehicleType: _currentDriver!.vehicleType,
+        vehicleModel: newData['vehicleModel'] ?? _currentDriver!.vehicleModel,
+        licensePlate: newData['licensePlate'] ?? _currentDriver!.licensePlate,
+        profileImageUrl: newData['profileImageUrl'] ?? _currentDriver!.profileImageUrl,
+        rating: _currentDriver!.rating,
+        preferredServiceTypes: _currentDriver!.preferredServiceTypes,
+        preferredPaymentMethods: _currentDriver!.preferredPaymentMethods,
+        cpf: newData['cpf'] ?? _currentDriver!.cpf,
+        birthDate: newData['birthDate'] ?? _currentDriver!.birthDate,
+        cnhImageUrl: newData['cnhImageUrl'] ?? _currentDriver!.cnhImageUrl,
+        docImageUrl: newData['docImageUrl'] ?? _currentDriver!.docImageUrl,
+        cnhOpcionalImageUrl: newData['cnhOpcionalImageUrl'] ?? _currentDriver!.cnhOpcionalImageUrl,
+        vehiclePhotoUrl: newData['vehiclePhotoUrl'] ?? _currentDriver!.vehiclePhotoUrl,
+        vehicleColor: newData['vehicleColor'] ?? _currentDriver!.vehicleColor,
+        renavam: newData['renavam'] ?? _currentDriver!.renavam,
+      );
+
+      // Salva no Firestore (só os campos alterados)
+      await FirebaseFirestore.instance
+          .collection('drivers')
+          .doc(_currentDriver!.id)
+          .update(newData);
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Atualiza dados do motorista a partir do Firestore (ex: após login ou update externo)
+  Future<void> refreshDriverFromFirestore() async {
+    if (_currentDriver == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('drivers')
+        .doc(_currentDriver!.id)
+        .get();
+    if (doc.exists) {
+      _currentDriver = Driver.fromDocument(doc);
+      notifyListeners();
+    }
   }
 }

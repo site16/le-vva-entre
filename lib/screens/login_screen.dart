@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Para TextInputFormatter
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:lottie/lottie.dart'; // <<< IMPORTAR PACOTE LOTTIE
-import '../providers/auth_provider.dart'; // Certifique-se que o caminho está correto
+import 'package:lottie/lottie.dart';
+import '../providers/auth_provider.dart'; // adapte para seu projeto
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,12 +13,11 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _cpfController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
   final Color _mainAppColor = const Color(0xFF009688);
 
-  // Controller para animação de pulsar
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
@@ -37,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   void dispose() {
     _pulseController.dispose();
-    _cpfController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -50,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     try {
       bool loggedIn = await authProvider.login(
-        _cpfController.text,
+        _emailController.text.trim(),
         _passwordController.text,
       );
       if (loggedIn && mounted) {
@@ -83,19 +82,17 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           children: <Widget>[
             // Header com Animação Lottie
             Container(
-              height: screenHeight * 0.30, // Altura do header
+              height: screenHeight * 0.30,
               width: double.infinity,
               color: _mainAppColor,
               child: Center(
-                // <<< SUBSTITUINDO O ÍCONE PELA ANIMAÇÃO LOTTIE >>>
                 child: Lottie.asset(
                   'assets/animations/entregador.json',
-                  height: screenHeight * 0.22, // Ajuste a altura da animação conforme necessário
+                  height: screenHeight * 0.22,
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) {
-                    // Fallback caso a animação não carregue
                     return Icon(
-                      Icons.delivery_dining_outlined, // Um ícone alternativo
+                      Icons.delivery_dining_outlined,
                       color: Colors.white,
                       size: 80,
                     );
@@ -119,7 +116,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
-                    // <<< TÍTULO CENTRALIZADO E ATUALIZADO >>>
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10.0),
                       child: Text(
@@ -134,23 +130,23 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     ),
                     const SizedBox(height: 35),
 
-                    // Campo CPF
+                    // Campo Email
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'CPF',
+                        'Email',
                         style: TextStyle(
-                            color: Colors.grey[700],
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500),
+                          color: Colors.grey[700],
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500),
                       ),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
-                      controller: _cpfController,
+                      controller: _emailController,
                       decoration: InputDecoration(
-                        hintText: '000.000.000-00',
-                        prefixIcon: Icon(Icons.badge_outlined, color: Colors.grey[600]),
+                        hintText: 'exemplo@email.com',
+                        prefixIcon: Icon(Icons.email_outlined, color: Colors.grey[600]),
                         filled: true,
                         fillColor: Colors.grey[200],
                         border: OutlineInputBorder(
@@ -159,19 +155,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         contentPadding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 15.0),
                       ),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(11),
-                        CpfInputFormatter(),
-                      ],
+                      keyboardType: TextInputType.emailAddress,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Por favor, insira seu CPF';
+                          return 'Por favor, insira seu email';
                         }
-                        String cleanCpf = value.replaceAll(RegExp(r'[^0-9]'), '');
-                        if (cleanCpf.length != 11) {
-                          return 'CPF deve conter 11 dígitos';
+                        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                          return 'Formato de email inválido';
                         }
                         return null;
                       },
@@ -184,16 +174,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       child: Text(
                         'Senha',
                         style: TextStyle(
-                            color: Colors.grey[700],
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500),
+                          color: Colors.grey[700],
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500),
                       ),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _passwordController,
                       decoration: InputDecoration(
-                        hintText: 'Sua senha de 8 dígitos',
+                        hintText: 'Sua senha',
                         prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[600]),
                         filled: true,
                         fillColor: Colors.grey[200],
@@ -204,17 +194,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         contentPadding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 15.0),
                       ),
                       obscureText: true,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(8),
-                      ],
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Por favor, insira sua senha';
                         }
-                        if (value.length != 8) {
-                          return 'A senha deve ter 8 dígitos';
+                        if (value.length < 6) {
+                          return 'A senha deve ter pelo menos 6 caracteres';
                         }
                         return null;
                       },
@@ -264,35 +249,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           ],
         ),
       ),
-    );
-  }
-}
-
-// Máscara de CPF (mantida do seu código original)
-class CpfInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    final String newText = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    StringBuffer maskedText = StringBuffer();
-
-    for (int i = 0; i < newText.length; i++) {
-      maskedText.write(newText[i]);
-      if (i == 2 || i == 5) {
-        if (i != newText.length -1) {
-          maskedText.write('.');
-        }
-      } else if (i == 8) {
-        if (i != newText.length -1) {
-          maskedText.write('-');
-        }
-      }
-    }
-
-    int selectionIndex = maskedText.length;
-
-    return TextEditingValue(
-      text: maskedText.toString(),
-      selection: TextSelection.collapsed(offset: selectionIndex),
     );
   }
 }

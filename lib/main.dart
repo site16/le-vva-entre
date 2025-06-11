@@ -3,14 +3,22 @@ import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-// Importações dos Providers
+// Firebase Core e opções do Firebase
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
+// App Check
+import 'package:firebase_app_check/firebase_app_check.dart';
+
+// Providers
 import 'providers/auth_provider.dart';
 import 'providers/order_provider.dart';
 import 'providers/wallet_provider.dart';
 import 'providers/history_provider.dart';
-import 'providers/notification_provider.dart'; // <-- Adicionado
+import 'providers/notification_provider.dart';
+import 'providers/user_provider.dart';
 
-// Importações das Telas
+// Telas
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/active_ride_screen.dart';
@@ -20,15 +28,25 @@ import 'screens/history_screen.dart';
 import 'screens/terms_of_use_screen.dart';
 import 'screens/help_screen.dart';
 import 'screens/sos_screen.dart';
-import 'screens/notification_screen.dart'; // <-- Adicionado
+import 'screens/notification_screen.dart';
 
-// Notificações locais (simulação de push)
+// Notificações locais
 import 'services/local_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR', null);
-  await LocalNotificationService.init(); // Inicializa notificações locais
+  await LocalNotificationService.init();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Ativando o App Check (use debug para desenvolvimento, playIntegrity para produção)
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: AndroidProvider.debug,
+    // androidProvider: AndroidProvider.playIntegrity, // use isto em produção e no dispositivo físico
+  );
+
   runApp(const LevvaEntregadorApp());
 }
 
@@ -41,9 +59,39 @@ class LevvaEntregadorApp extends StatelessWidget {
 
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => WalletProvider()),
-        ChangeNotifierProvider(create: (_) => NotificationProvider()), // <-- Adicionado
+        ChangeNotifierProvider<AuthProvider>(
+          create: (_) => AuthProvider(),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, UserProvider>(
+          create: (context) => UserProvider(),
+          update: (context, auth, userProvider) {
+            final userId = auth.currentDriver?.id;
+            if (userId != null && userProvider != null) {
+              userProvider.loadUser(userId);
+            }
+            return userProvider ?? UserProvider();
+          },
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, WalletProvider>(
+          create: (context) => WalletProvider(),
+          update: (context, auth, previousWallet) {
+            final userId = auth.currentDriver?.id;
+            if (userId != null && userId.isNotEmpty) {
+              previousWallet?.fetchWalletData();
+            }
+            return previousWallet ?? WalletProvider();
+          },
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, NotificationProvider>(
+          create: (context) => NotificationProvider(userId: null),
+          update: (context, auth, previousNotifier) {
+            final userId = auth.currentDriver?.id;
+            if (previousNotifier == null || previousNotifier.userId != userId) {
+              return NotificationProvider(userId: userId);
+            }
+            return previousNotifier;
+          },
+        ),
         ChangeNotifierProxyProvider2<AuthProvider, WalletProvider, OrderProvider>(
           create: (context) {
             final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -56,18 +104,14 @@ class LevvaEntregadorApp extends StatelessWidget {
             return newProvider;
           },
         ),
-        ChangeNotifierProxyProvider<OrderProvider, HistoryProvider>(
-          create: (context) {
-            final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-            return HistoryProvider(orderProvider);
-          },
-          update: (context, orderProvider, previousHistoryProvider) {
-            if (previousHistoryProvider == null) {
-              final initialOrderProvider = Provider.of<OrderProvider>(context, listen: false);
-              return HistoryProvider(initialOrderProvider);
+        ChangeNotifierProxyProvider<AuthProvider, HistoryProvider>(
+          create: (context) => HistoryProvider(userId: null),
+          update: (context, auth, previousHistory) {
+            final driverId = auth.currentDriver?.id;
+            if (previousHistory == null || previousHistory.userId != driverId) {
+              return HistoryProvider(userId: driverId);
             }
-            previousHistoryProvider.updateOrderProvider(orderProvider);
-            return previousHistoryProvider;
+            return previousHistory;
           },
         ),
       ],
@@ -76,7 +120,7 @@ class LevvaEntregadorApp extends StatelessWidget {
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF009688),
+            seedColor: primaryColor,
             primary: primaryColor,
             onPrimary: Colors.white,
             secondary: Colors.amber,
@@ -149,7 +193,7 @@ class LevvaEntregadorApp extends StatelessWidget {
           ),
           bottomNavigationBarTheme: BottomNavigationBarThemeData(
             backgroundColor: Colors.white,
-            selectedItemColor: const Color(0xFF009688),
+            selectedItemColor: primaryColor,
             unselectedItemColor: Colors.grey.shade600,
             selectedLabelStyle: const TextStyle(
               fontWeight: FontWeight.w600,
@@ -188,7 +232,7 @@ class LevvaEntregadorApp extends StatelessWidget {
           TermsOfUseScreen.routeName: (context) => const TermsOfUseScreen(),
           HelpScreen.routeName: (context) => const HelpScreen(),
           SosScreen.routeName: (context) => const SosScreen(),
-          NotificationScreen.routeName: (context) => const NotificationScreen(), // <-- Adicionado
+          NotificationScreen.routeName: (context) => const NotificationScreen(),
         },
       ),
     );

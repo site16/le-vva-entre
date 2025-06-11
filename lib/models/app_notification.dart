@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 enum AppNotificationType {
@@ -6,7 +7,30 @@ enum AppNotificationType {
   info,
   warning,
   system,
-  withdrawalRequest, // <-- Adicionado
+  withdrawalRequest,
+}
+
+AppNotificationType appNotificationTypeFromString(String value) {
+  switch (value) {
+    case 'newOrder':
+      return AppNotificationType.newOrder;
+    case 'coupon':
+      return AppNotificationType.coupon;
+    case 'info':
+      return AppNotificationType.info;
+    case 'warning':
+      return AppNotificationType.warning;
+    case 'system':
+      return AppNotificationType.system;
+    case 'withdrawalRequest':
+      return AppNotificationType.withdrawalRequest;
+    default:
+      return AppNotificationType.system;
+  }
+}
+
+String appNotificationTypeToString(AppNotificationType type) {
+  return type.toString().split('.').last;
 }
 
 class AppNotification {
@@ -72,5 +96,33 @@ class AppNotification {
       case AppNotificationType.withdrawalRequest:
         return Colors.teal;
     }
+  }
+
+  // --- Firestore Serialization ---
+  factory AppNotification.fromMap(Map<String, dynamic> map, String id) {
+    return AppNotification(
+      id: id,
+      title: map['title'] as String,
+      body: map['body'] as String,
+      date: (map['date'] as Timestamp?)?.toDate() ??
+          DateTime.tryParse(map['date'] ?? '') ??
+          DateTime.now(),
+      type: map['type'] is String
+          ? appNotificationTypeFromString(map['type'])
+          : AppNotificationType.system,
+      data: map['data'] as Map<String, dynamic>?,
+      read: map['read'] ?? false,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'body': body,
+      'date': date,
+      'type': appNotificationTypeToString(type),
+      'data': data,
+      'read': read,
+    };
   }
 }

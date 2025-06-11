@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:levva_entregador/models/order_model.dart';
 
 class RideHistoryEntry {
@@ -9,7 +10,7 @@ class RideHistoryEntry {
   final String destination;
   final double value;
   final OrderStatus status;
-  final PaymentMethod paymentMethod; // <-- Adicionado aqui
+  final PaymentMethod paymentMethod;
   final String? notes;
   final String? code;
   final String? userName;
@@ -25,7 +26,7 @@ class RideHistoryEntry {
     required this.destination,
     required this.value,
     required this.status,
-    required this.paymentMethod, // <-- Adicionado aqui
+    required this.paymentMethod,
     this.notes,
     this.code,
     this.userName,
@@ -33,6 +34,59 @@ class RideHistoryEntry {
     this.timeAccepted,
     this.timeDelivered,
   });
+
+  // Firebase: Criação do modelo a partir de um DocumentSnapshot
+  factory RideHistoryEntry.fromDocument(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+
+    T _enumFromString<T>(List<T> enumValues, String value, T defaultValue) {
+      try {
+        return enumValues.firstWhere((e) => (e as Enum).name == value);
+      } catch (_) {
+        return defaultValue;
+      }
+    }
+
+    return RideHistoryEntry(
+      id: doc.id,
+      type: _enumFromString(OrderType.values, data['type'] as String? ?? OrderType.unknown.name, OrderType.unknown),
+      dateTime: (data['dateTime'] is Timestamp)
+          ? (data['dateTime'] as Timestamp).toDate()
+          : (data['dateTime'] is String)
+              ? DateTime.tryParse(data['dateTime']) ?? DateTime.now()
+              : DateTime.now(),
+      origin: data['origin'] ?? '',
+      destination: data['destination'] ?? '',
+      value: (data['value'] as num?)?.toDouble() ?? 0.0,
+      status: _enumFromString(OrderStatus.values, data['status'] as String? ?? OrderStatus.unknown.name, OrderStatus.unknown),
+      paymentMethod: _enumFromString(PaymentMethod.values, data['paymentMethod'] as String? ?? PaymentMethod.online.name, PaymentMethod.online),
+      notes: data['notes'],
+      code: data['code'],
+      userName: data['userName'],
+      timeStart: data['timeStart'],
+      timeAccepted: data['timeAccepted'],
+      timeDelivered: data['timeDelivered'],
+    );
+  }
+
+  // Firebase: Serialização para Firestore
+  Map<String, dynamic> toMap() {
+    return {
+      'type': type.name,
+      'dateTime': dateTime,
+      'origin': origin,
+      'destination': destination,
+      'value': value,
+      'status': status.name,
+      'paymentMethod': paymentMethod.name,
+      'notes': notes,
+      'code': code,
+      'userName': userName,
+      'timeStart': timeStart,
+      'timeAccepted': timeAccepted,
+      'timeDelivered': timeDelivered,
+    };
+  }
 
   // Ícone para o tipo de pedido
   IconData get iconData {
@@ -123,5 +177,43 @@ class RideHistoryEntry {
       default:
         return Colors.grey.shade600;
     }
+  }
+
+  /// Salva/atualiza entrada do histórico no Firestore
+  Future<void> saveToFirestore(String userId) async {
+    final docRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('ride_history')
+        .doc(id);
+    await docRef.set(toMap(), SetOptions(merge: true));
+  }
+
+  /// Busca todas as rides do usuário
+  static Future<List<RideHistoryEntry>> fetchHistory(String userId) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('ride_history')
+        .orderBy('dateTime', descending: true)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => RideHistoryEntry.fromDocument(doc))
+        .toList();
+  }
+
+  /// Busca uma ride específica pelo id
+  static Future<RideHistoryEntry?> fetchById(String userId, String rideId) async {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('ride_history')
+        .doc(rideId)
+        .get();
+    if (doc.exists) {
+      return RideHistoryEntry.fromDocument(doc);
+    }
+    return null;
   }
 }
