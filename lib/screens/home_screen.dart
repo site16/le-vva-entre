@@ -362,15 +362,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     final offeredOrder = orderProvider.currentOfferedOrder;
 
+    // Pegue o ID do entregador autenticado para passar ao MapDisplay
+    final deliverymanId = authProvider.currentDriver?.id ?? '';
+
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          const Positioned.fill(
+          Positioned.fill(
             child: MapDisplay(
               enableCurrentLocation: true,
-              initialCameraPosition: CameraPosition(
+              deliverymanId: deliverymanId,
+              initialCameraPosition: const CameraPosition(
                 target: LatLng(-23.5505, -46.6333),
                 zoom: 13,
               ),

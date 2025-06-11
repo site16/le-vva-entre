@@ -7,13 +7,16 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 // Exibe apenas o mapa (no estado offline)
 class OfflineScreenContent extends StatelessWidget {
-  const OfflineScreenContent({super.key});
+  final String deliverymanId;
+  const OfflineScreenContent({super.key, required this.deliverymanId});
+
   @override
   Widget build(BuildContext context) {
     // Exibe o mapa em vez do layout offline antigo
-    return const MapDisplay(
+    return MapDisplay(
       enableCurrentLocation: true,
-      initialCameraPosition: CameraPosition(
+      deliverymanId: deliverymanId,
+      initialCameraPosition: const CameraPosition(
         target: LatLng(-23.5505, -46.6333), // Exemplo: São Paulo
         zoom: 13,
       ),

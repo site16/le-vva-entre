@@ -10,6 +10,7 @@ import 'package:lottie/lottie.dart';
 import 'package:levva_entregador/widgets/user_rating_dialog.dart';
 import 'package:levva_entregador/widgets/map_display.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
+import 'package:levva_entregador/providers/auth_provider.dart';
 
 class ActiveRideScreen extends StatefulWidget {
   static const routeName = '/active_ride';
@@ -48,6 +49,9 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
   }
 
   // ---------- Métodos auxiliares e dialogs ----------
+  // ... mantenha todos os métodos auxiliares, dialogs, etc. do seu código original aqui ...
+
+  // -- CÓDIGO DO USUÁRIO INALTERADO, APENAS O MAPDISPLAY É AJUSTADO! --
 
   Future<void> _showRideCompletionDialog(
     BuildContext context,
@@ -624,6 +628,7 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
   @override
   Widget build(BuildContext context) {
     final orderProvider = context.watch<OrderProvider>();
+    final authProvider = context.watch<AuthProvider>();
     final Order? currentActiveOrder = orderProvider.activeOrder;
 
     if (_isExiting) {
@@ -778,7 +783,8 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
       );
     }
 
-    // ----------- FIM DO BLOCO DE MAPA -----------
+    // Pegue o id do entregador autenticado para passar ao MapDisplay
+    final deliverymanId = authProvider.currentDriver?.id ?? '';
 
     return WillPopScope(
       onWillPop: () async {
@@ -809,8 +815,8 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
             currentActiveOrder.type == OrderType.food
                 ? (currentActiveOrder.storeName ?? "Pedido de Comida")
                 : currentActiveOrder.type == OrderType.package
-                ? "Entrega de Pacote"
-                : "Corrida de Moto",
+                    ? "Entrega de Pacote"
+                    : "Corrida de Moto",
             style: const TextStyle(
               color: Colors.black,
               fontWeight: FontWeight.bold,
@@ -843,6 +849,7 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
                 markers: mapMarkers,
                 polylines: mapPolylines,
                 enableCurrentLocation: true,
+                deliverymanId: deliverymanId,
               ),
             ),
             // ----------- FIM MAPA, RESTANTE IGUAL -----------
@@ -924,8 +931,8 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
                                 ? _buildAwaitingStoreConfirmationUI()
                                 : currentActiveOrder.status ==
                                     OrderStatus.awaitingPickup
-                                ? _buildWaitingForPickupUI(orderProvider)
-                                : _buildDefaultETA_UI(currentActiveOrder),
+                                    ? _buildWaitingForPickupUI(orderProvider)
+                                    : _buildDefaultETA_UI(currentActiveOrder),
                       ),
                       const Divider(height: 30),
                       Row(

@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:location/location.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
 
+/// Este widget exibe o mapa, mostra a localização do entregador localmente
+/// e também envia a localização em tempo real para o Firestore para que o app do usuário possa ver.
 class MapDisplay extends StatefulWidget {
   final CameraPosition? initialCameraPosition;
   final Set<Marker>? markers;
@@ -12,6 +15,8 @@ class MapDisplay extends StatefulWidget {
   final void Function(GoogleMapController controller)? onMapCreated;
   final MapType mapType;
   final bool enableCurrentLocation;
+  /// id do entregador autenticado
+  final String? deliverymanId;
 
   const MapDisplay({
     Key? key,
@@ -22,6 +27,7 @@ class MapDisplay extends StatefulWidget {
     this.onMapCreated,
     this.mapType = MapType.normal,
     this.enableCurrentLocation = true,
+    required this.deliverymanId,
   }) : super(key: key);
 
   @override
@@ -110,7 +116,7 @@ class _MapDisplayState extends State<MapDisplay> with SingleTickerProviderStateM
   }
 
   void _listenLocationChanges() {
-    _locationService.onLocationChanged.listen((LocationData locationData) {
+    _locationService.onLocationChanged.listen((LocationData locationData) async {
       // Detecta movimento
       bool moving = false;
       if (_lastLocation != null) {
@@ -142,6 +148,16 @@ class _MapDisplayState extends State<MapDisplay> with SingleTickerProviderStateM
       } else {
         _animationController?.stop();
         _animationController?.reset();
+      }
+      
+      // ENVIE para o Firestore:
+      if (widget.deliverymanId != null && locationData.latitude != null && locationData.longitude != null) {
+        await FirebaseFirestore.instance.collection('deliverymen').doc(widget.deliverymanId).set({
+          'latitude': locationData.latitude,
+          'longitude': locationData.longitude,
+          'online': true,
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
     });
   }
